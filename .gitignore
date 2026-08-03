@@ -4,4 +4,6 @@ __pycache__/
 src/config_private.py
 server/ota/releases/
 secrets.py
+src/old/
+
 
