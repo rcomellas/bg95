@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.vscode/*.log
+src/config_private.py
+server/ota/releases/
+secrets.py
+
