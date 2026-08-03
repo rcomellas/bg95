@@ -3,7 +3,6 @@ import ujson
 import quecgnss
 import pm
 import checkNet
-import _thread
 import atcmd
 from misc import Power
 from umqtt import MQTTClient
@@ -16,7 +15,7 @@ from usr import secrets
 
 TAU_DEMANAT = 3600
 TOPIC_ORDRES = b"bg95/command"
-BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
+BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/ota/"
 
 fitxers_ota_pendents = None
 
@@ -36,13 +35,6 @@ def processar_ordre(topic, missatge):
 
     except Exception as error:
         print("Error processant ordre:", error)
-
-
-def escoltar_mqtt(client):
-    try:
-        client.wait_msg()
-    except Exception as error:
-        print("Fil MQTT finalitzat:", error)
 
 
 def executar_ota(fitxers, client):
@@ -173,9 +165,6 @@ def publicar_mqtt(posicio, status):
     client.subscribe(TOPIC_ORDRES, 0)
     print("Subscrit a:", TOPIC_ORDRES)
 
-    _thread.stack_size(16 * 1024)
-    _thread.start_new_thread(escoltar_mqtt, (client,))
-
     if posicio:
         latitud, longitud, satel_lits = posicio
 
@@ -202,6 +191,8 @@ def publicar_mqtt(posicio, status):
         ujson.dumps(status),
         True
     )
+
+    client.check_msg()
 
     if fitxers_ota_pendents:
         fitxers = fitxers_ota_pendents
