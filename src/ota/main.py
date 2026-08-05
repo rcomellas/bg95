@@ -16,6 +16,7 @@ from usr import secrets
 # endregion imports
 
 # region Constants
+VERSIO = "2026-08-05-1"
 TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
@@ -241,7 +242,8 @@ def main():
             "active_time": active_time,
             "net_time": net_time,
             "gnss_time": gnss_time,
-            "fix": posicio is not None
+            "fix": posicio is not None,
+            "versio": VERSIO
         }
 
         try:
