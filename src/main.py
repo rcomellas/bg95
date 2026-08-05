@@ -14,12 +14,14 @@ from usr import xtra
 from usr import config
 from usr import secrets
 # endregion imports
+
 # region Constants
-TAU_DEMANAT = 3600
+TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
 _thread.stack_size(16 * 1024)
 # endregion
+
 fitxers_ota_pendents = None
 
 
@@ -57,8 +59,6 @@ def obtenir_posicio():
                 satel_lits = int(gga[7]) if gga and gga[7] else 0
 
                 return latitud, longitud, satel_lits
-
-        print("Sense fix")
         time.sleep(2)
 
     return None
@@ -73,10 +73,8 @@ def convertir_coordenada(valor, hemisferi, graus):
     return round(decimal, 6)
 
 
-def temps_transcorregut(inici): -
-
-
-return time.ticks_diff(time.ticks_ms(), inici) // 1000
+def temps_transcorregut(inici):
+    return time.ticks_diff(time.ticks_ms(), inici) // 1000
 
 
 def obtenir_psm_negociat():
@@ -98,7 +96,6 @@ def obtenir_psm_negociat():
     try:
         return int(valors[1]), int(valors[3])
     except Exception:
-        print("Resposta QPSMS no reconeguda:", text)
         return None, None
 
 
@@ -115,13 +112,11 @@ def publicar_mqtt(posicio, status):
 
     client.set_callback(processar_ordre)
 
-    print("Connectant MQTT...")
     inici = time.ticks_ms()
 
-    print("MQTT connectat:", client.connect())
+    client.connect()
 
     client.subscribe(TOPIC_ORDRES, 0)
-    print("Subscrit a:", TOPIC_ORDRES)
 
     _thread.start_new_thread(escoltar_mqtt, (client,))
 
@@ -130,8 +125,8 @@ def publicar_mqtt(posicio, status):
 
         missatge = {
             "id": config.DEVICE_ID,
-            "lat": latitud,
-            "lon": longitud,
+            "latitude": latitud,
+            "longitude": longitud,
             "bat": Power.getVbatt(),
             "sat": satel_lits
         }
@@ -142,8 +137,6 @@ def publicar_mqtt(posicio, status):
             True
         )
 
-        print("Enviat:", missatge)
-
     status["mqtt_time"] = temps_transcorregut(inici)
 
     client.publish(
@@ -151,19 +144,19 @@ def publicar_mqtt(posicio, status):
         ujson.dumps(status),
         True
     )
+
     if fitxers_ota_pendents:
         executar_ota(fitxers_ota_pendents, client)
         return
 
     client.disconnect()
-    print("Status:", status)
 
 
 def escoltar_mqtt(client):
     try:
         client.wait_msg()
     except Exception as error:
-        print("Fil MQTT:", error)
+        pass
 
 
 def processar_ordre(topic, missatge):
@@ -174,10 +167,9 @@ def processar_ordre(topic, missatge):
 
         if ordre.get("cmd") == "ota":
             fitxers_ota_pendents = ordre.get("files")
-            print("Ordre OTA rebuda:", fitxers_ota_pendents)
 
     except Exception as error:
-        print("Error processant ordre:", error)
+        pass
 
 
 def executar_ota(fitxers, client):
@@ -189,10 +181,7 @@ def executar_ota(fitxers, client):
             "/usr/" + nom
         )
 
-        print("OTA:", nom, resultat)
-
         if resultat != 0:
-            print("Error OTA:", nom)
             client.disconnect()
             return
 
@@ -200,8 +189,7 @@ def executar_ota(fitxers, client):
     client.publish(TOPIC_ORDRES, b"", True)
     client.disconnect()
 
-    ota.set_update_flag()
-    print("OTA preparada. Reiniciant...")
+    ota.set_update_flag()  # OTA preparada. Reinicia
     Power.powerRestart()
 
 
@@ -209,40 +197,39 @@ def main():
     # Evita que el PSM anterior talli el GNSS mentre busca fix
     pm.autosleep(0)
 
-    psm_actiu = pm.get_psm_time()[0]
-    if psm_actiu:
-        print("PSM anterior desactivat:", pm.set_psm_time(0))
+    if pm.get_psm_time()[0]:
+        pm.set_psm_time(0)
 
     inici = time.ticks_ms()
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
 
     if stage == 3 and state == 1:
-        print("Xarxa disponible")
-
         try:
             xtra.actualitzar_si_cal()
         except Exception as error:
-            print("Error XTRA:", error)
+            pass
 
         quecgnss.setPriority(0)
 
         if quecgnss.init() != 0:
-            print("Error inicialitzant GNSS")
             posicio = None
             gnss_time = 0
 
         else:
-            print("Esperant fix GNSS...")
-
             inici = time.ticks_ms()
             posicio = obtenir_posicio()
             gnss_time = temps_transcorregut(inici)
 
             quecgnss.gnssEnable(0)
 
-        # TAU d'1 hora i Active Time de 30 segons
-        print("PSM:", pm.set_psm_time(1, 1, 0, 15))
+        unitat_tau, valor_tau = (
+            (5, TAU_DEMANAT // 60)
+            if TAU_DEMANAT < 3600
+            else (1, TAU_DEMANAT // 3600)
+        )
+
+        pm.set_psm_time(unitat_tau, valor_tau, 0, 15)
 
         time.sleep(5)
 
@@ -260,13 +247,9 @@ def main():
         try:
             publicar_mqtt(posicio, status)
         except Exception as error:
-            print("Error MQTT:", error)
-
-    else:
-        print("Sense xarxa")
+            pass
 
     pm.autosleep(1)
-    print("Esperant entrada en PSM...")
     time.sleep(120)
 
 
