@@ -19,6 +19,8 @@ from usr import secrets
 # region Constants
 DEBUG = True
 TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
+# segons. Per defecte 6 segons, que és el mínim que permet la xarxa. Si es vol més temps, cal demanar-ho a l'operador.
+ACTIVE_TIME = 6
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
 _thread.stack_size(16 * 1024)
@@ -78,9 +80,6 @@ def convertir_coordenada(valor, hemisferi, graus):
 
 def temps_transcorregut(inici):
     return time.ticks_diff(time.ticks_ms(), inici) // 1000
-
-
-DEBUG = True
 
 
 def debug(*args):
@@ -219,7 +218,6 @@ def main():
     if stage == 3 and state == 1:
         try:
             quecgnss.gnssEnable(0)
-            time.sleep(1)
 
             xtra.actualitzar_si_cal()
         except Exception as error:
@@ -245,7 +243,7 @@ def main():
             else (1, TAU_DEMANAT // 3600)
         )
 
-        pm.set_psm_time(unitat_tau, valor_tau, 0, 15)
+        pm.set_psm_time(unitat_tau, valor_tau, 0, ACTIVE_TIME // 2)
 
         time.sleep(5)
 
