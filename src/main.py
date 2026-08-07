@@ -9,6 +9,7 @@ import atcmd
 from misc import Power
 from umqtt import MQTTClient
 import app_fota
+from machine import WDT
 
 from usr import xtra
 from usr import config
@@ -16,12 +17,14 @@ from usr import secrets
 # endregion imports
 
 # region Constants
+DEBUG = True
 TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
 _thread.stack_size(16 * 1024)
 # endregion
 
+wdt = WDT(120)  # 2 minuts
 fitxers_ota_pendents = None
 
 
@@ -30,7 +33,6 @@ def obtenir_posicio():
 
     while time.ticks_diff(time.ticks_ms(), inici) < config.TEMPS_MAXIM_FIX * 1000:
         resultat = quecgnss.read(4096)
-
         if resultat != -1 and resultat[0] > 0:
             dades = resultat[1]
 
@@ -59,6 +61,7 @@ def obtenir_posicio():
                 satel_lits = int(gga[7]) if gga and gga[7] else 0
 
                 return latitud, longitud, satel_lits
+        debug("Sense fix GNSS. Esperant 2 segons...")
         time.sleep(2)
 
     return None
@@ -75,6 +78,14 @@ def convertir_coordenada(valor, hemisferi, graus):
 
 def temps_transcorregut(inici):
     return time.ticks_diff(time.ticks_ms(), inici) // 1000
+
+
+DEBUG = True
+
+
+def debug(*args):
+    if DEBUG:
+        print(*args)
 
 
 def obtenir_psm_negociat():
@@ -203,9 +214,13 @@ def main():
     inici = time.ticks_ms()
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
+    wdt.feed()
 
     if stage == 3 and state == 1:
         try:
+            quecgnss.gnssEnable(0)
+            time.sleep(1)
+
             xtra.actualitzar_si_cal()
         except Exception as error:
             pass
@@ -220,7 +235,8 @@ def main():
             inici = time.ticks_ms()
             posicio = obtenir_posicio()
             gnss_time = temps_transcorregut(inici)
-
+            wdt.feed()
+            debug("Posició obtinguda en", gnss_time, "segons:", posicio)
             quecgnss.gnssEnable(0)
 
         unitat_tau, valor_tau = (
@@ -246,6 +262,8 @@ def main():
 
         try:
             publicar_mqtt(posicio, status)
+            debug("Publicat MQTT posicio: ", posicio, "status:", status)
+            wdt.feed()
         except Exception as error:
             pass
 

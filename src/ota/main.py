@@ -218,6 +218,8 @@ def main():
             gnss_time = 0
 
         else:
+            quecgnss.gnssEnable(1)
+
             inici = time.ticks_ms()
             posicio = obtenir_posicio()
             gnss_time = temps_transcorregut(inici)
