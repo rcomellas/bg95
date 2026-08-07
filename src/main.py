@@ -20,17 +20,18 @@ from usr import secrets
 DEBUG = True
 TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
 # segons. Per defecte 6 segons, que és el mínim que permet la xarxa. Si es vol més temps, cal demanar-ho a l'operador.
-ACTIVE_TIME = 6
+ACTIVE_TIME = 0
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
 _thread.stack_size(16 * 1024)
 # endregion
 
-wdt = WDT(120)  # 2 minuts
+wdt = WDT(180)  # 2 minuts
 fitxers_ota_pendents = None
 
 
 def obtenir_posicio():
+    debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
     inici = time.ticks_ms()
 
     while time.ticks_diff(time.ticks_ms(), inici) < config.TEMPS_MAXIM_FIX * 1000:
