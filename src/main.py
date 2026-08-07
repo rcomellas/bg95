@@ -20,13 +20,13 @@ from usr import secrets
 DEBUG = True
 TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
 # segons. Per defecte 6 segons, que és el mínim que permet la xarxa. Si es vol més temps, cal demanar-ho a l'operador.
-ACTIVE_TIME = 0
+ACTIVE_TIME = 6
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
 _thread.stack_size(16 * 1024)
 # endregion
 
-wdt = WDT(180)  # 2 minuts
+wdt = WDT(180)  # en segons
 fitxers_ota_pendents = None
 
 
@@ -159,7 +159,8 @@ def publicar_mqtt(posicio, status):
     if fitxers_ota_pendents:
         executar_ota(fitxers_ota_pendents, client)
         return
-
+    debug(posicio, status)
+    time.sleep(1)
     client.disconnect()
 
 
