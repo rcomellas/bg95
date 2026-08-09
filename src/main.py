@@ -17,7 +17,7 @@ from usr import secrets
 # endregion imports
 
 # region Constants
-VERSIO = "1.0.0"
+VERSIO = "1.0.1"
 DEBUG = True
 TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
 # segons. Per defecte 6 segons, que és el mínim que permet la xarxa. Si es vol més temps, cal demanar-ho a l'operador.
