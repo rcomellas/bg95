@@ -159,7 +159,6 @@ def publicar_mqtt(posicio, status):
     if fitxers_ota_pendents:
         executar_ota(fitxers_ota_pendents, client)
         return
-    debug(posicio, status)
     time.sleep(1)
     client.disconnect()
 
@@ -247,7 +246,7 @@ def main():
 
         pm.set_psm_time(unitat_tau, valor_tau, 0, ACTIVE_TIME // 2)
 
-        time.sleep(5)
+        time.sleep(2)
 
         tau_net, active_time = obtenir_psm_negociat()
 
