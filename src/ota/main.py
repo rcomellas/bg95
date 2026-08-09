@@ -89,20 +89,21 @@ def debug(*args):
         print(*args)
 
 
-def obtenir_qcsq():
+def obtenir_senyal():
     resposta = bytearray(100)
 
-    ret = atcmd.sendSync(
-        'AT+QCSQ\r\n',
-        resposta,
-        '',
-        2
-    )
+    ret = atcmd.sendSync("AT+QCSQ\r\n", resposta, "", 2)
 
     if ret != 0:
-        return None
+        return None, None
 
-    return bytes(resposta).decode("utf-8", "ignore").strip()
+    text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "")
+
+    try:
+        dades = text.split(":")[1].strip().split(",")
+        return int(dades[2]), int(dades[4])
+    except Exception:
+        return None, None
 
 
 def obtenir_psm_negociat():
@@ -265,6 +266,7 @@ def main():
         time.sleep(2)
 
         tau_net, active_time = obtenir_psm_negociat()
+        rsrp, rsrq = obtenir_senyal()
 
         status = {
             "version": VERSIO,
@@ -275,8 +277,8 @@ def main():
             "net_time": net_time,
             "gnss_time": gnss_time,
             "fix": posicio is not None,
-            "qcsq": obtenir_qcsq()
-        }
+            "rsrp": rsrp,
+            "rsrq": rsrq}
 
         try:
             publicar_mqtt(posicio, status)
