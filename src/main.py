@@ -17,6 +17,7 @@ from usr import secrets
 # endregion imports
 
 # region Constants
+VERSIO = "1.0.0"
 DEBUG = True
 TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
 # segons. Per defecte 6 segons, que és el mínim que permet la xarxa. Si es vol més temps, cal demanar-ho a l'operador.
@@ -138,7 +139,6 @@ def publicar_mqtt(posicio, status):
             "id": config.DEVICE_ID,
             "latitude": latitud,
             "longitude": longitud,
-            "bat": Power.getVbatt(),
             "sat": satel_lits
         }
 
@@ -252,6 +252,8 @@ def main():
         tau_net, active_time = obtenir_psm_negociat()
 
         status = {
+            "version": VERSIO,
+            "bat": Power.getVbatt(),
             "tau_req": TAU_DEMANAT,
             "tau_net": tau_net,
             "active_time": active_time,
