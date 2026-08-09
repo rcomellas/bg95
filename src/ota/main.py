@@ -96,7 +96,7 @@ def obtenir_psm_negociat():
         "AT+QPSMS?\r\n",
         resposta,
         "",
-        10
+        2
     )
 
     if ret != 0:
