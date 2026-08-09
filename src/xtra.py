@@ -5,7 +5,7 @@ import atcmd
 HORES_MINIMES = 12
 
 
-def enviar_at(comanda, espera=10):
+def enviar_at(comanda, espera=5):
     resposta = bytearray(300)
 
     ret = atcmd.sendSync(
@@ -52,7 +52,7 @@ def descarregar():
     if ret != 0:
         return False
 
-    for _ in range(15):
+    for _ in range(5):
         time.sleep(2)
 
         hores = obtenir_hores_restants()
@@ -64,12 +64,18 @@ def descarregar():
 
 
 def actualitzar_si_cal():
+    """
+    Retorna:
+        "ok"          -> ja tenia dades XTRA vàlides, no calia descarregar
+        "descarregat" -> s'ha fet una descàrrega nova (cal marge abans del GNSS)
+        "error"       -> ha fallat la descàrrega
+    """
     hores = obtenir_hores_restants()
 
-    if hores is None:
-        return descarregar()
+    if hores is None or hores <= HORES_MINIMES:
+        if descarregar():
+            return "descarregat"
+        else:
+            return "error"
 
-    if hores <= HORES_MINIMES:
-        return descarregar()
-
-    return True
+    return "ok"
