@@ -236,6 +236,8 @@ def processar_ordre(topic, missatge):
     global tracking_inici
 
     try:
+        debug("Ordre MQTT rebuda:", missatge)
+
         ordre = ujson.loads(missatge)
 
         cmd = ordre.get("cmd")
