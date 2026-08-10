@@ -1,4 +1,5 @@
 # region imports
+
 import time
 import ujson
 import quecgnss
@@ -14,33 +15,48 @@ from machine import WDT
 from usr import xtra
 from usr import config
 from usr import secrets
+
 # endregion imports
 
 # region Constants
-VERSIO = "1.0.2"
+
+VERSIO = "1.0.3"
 DEBUG = True
 
-TAU_CURT = 1800       # 30 min
-TAU_LLARG = 10800     # 3 h
+TAU_CURT = 1800
+TAU_LLARG = 10800
 HORA_INICI_NIT = 0
 HORA_FINAL_NIT = 7
 ACTIVE_TIME = 6
 
+TRACKING_INTERVAL_DEFECTE = 30
+TRACKING_MAX_DEFECTE = 600
+
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
+
 _thread.stack_size(16 * 1024)
+
 # endregion
 
-wdt = WDT(180)  # en segons
+wdt = WDT(180)
+
 fitxers_ota_pendents = None
+
+tracking_actiu = False
+tracking_interval = TRACKING_INTERVAL_DEFECTE
+tracking_max = TRACKING_MAX_DEFECTE
+tracking_inici = None
 
 
 def obtenir_posicio():
     debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
+
     inici = time.ticks_ms()
 
     while time.ticks_diff(time.ticks_ms(), inici) < config.TEMPS_MAXIM_FIX * 1000:
         resultat = quecgnss.read(4096)
+
         if resultat != -1 and resultat[0] > 0:
             dades = resultat[1]
 
@@ -69,6 +85,7 @@ def obtenir_posicio():
                 satel_lits = int(gga[7]) if gga and gga[7] else 0
 
                 return latitud, longitud, satel_lits
+
         debug("Sense fix GNSS. Esperant 2 segons...")
         time.sleep(2)
 
@@ -106,6 +123,7 @@ def obtenir_senyal():
     try:
         dades = text.split(":")[1].strip().split(",")
         return int(dades[2]), int(dades[4])
+
     except Exception:
         return None, None
 
@@ -138,8 +156,29 @@ def obtenir_psm_negociat():
 
     try:
         return int(valors[1]), int(valors[3])
+
     except Exception:
         return None, None
+
+
+def publicar_posicio(client, posicio):
+    if not posicio:
+        return
+
+    latitud, longitud, satel_lits = posicio
+
+    missatge = {
+        "id": config.DEVICE_ID,
+        "latitude": latitud,
+        "longitude": longitud,
+        "sat": satel_lits
+    }
+
+    client.publish(
+        config.TOPIC_POSICIO,
+        ujson.dumps(missatge),
+        True
+    )
 
 
 def publicar_mqtt(posicio, status):
@@ -158,26 +197,11 @@ def publicar_mqtt(posicio, status):
     inici = time.ticks_ms()
 
     client.connect()
-
     client.subscribe(TOPIC_ORDRES, 0)
 
     _thread.start_new_thread(escoltar_mqtt, (client,))
 
-    if posicio:
-        latitud, longitud, satel_lits = posicio
-
-        missatge = {
-            "id": config.DEVICE_ID,
-            "latitude": latitud,
-            "longitude": longitud,
-            "sat": satel_lits
-        }
-
-        client.publish(
-            config.TOPIC_POSICIO,
-            ujson.dumps(missatge),
-            True
-        )
+    publicar_posicio(client, posicio)
 
     status["mqtt_time"] = temps_transcorregut(inici)
 
@@ -187,31 +211,57 @@ def publicar_mqtt(posicio, status):
         True
     )
 
+    time.sleep(1)
+
     if fitxers_ota_pendents:
         executar_ota(fitxers_ota_pendents, client)
-        return
-    time.sleep(1)
-    client.disconnect()
+
+    return client
 
 
 def escoltar_mqtt(client):
-    try:
-        client.wait_msg()
-    except Exception as error:
-        pass
+    while True:
+        try:
+            client.wait_msg()
+
+        except Exception:
+            break
 
 
 def processar_ordre(topic, missatge):
     global fitxers_ota_pendents
+    global tracking_actiu
+    global tracking_interval
+    global tracking_max
+    global tracking_inici
 
     try:
         ordre = ujson.loads(missatge)
 
-        if ordre.get("cmd") == "ota":
+        cmd = ordre.get("cmd")
+
+        if cmd == "ota":
             fitxers_ota_pendents = ordre.get("files")
 
+        elif cmd == "track_start":
+            tracking_interval = ordre.get(
+                "interval",
+                TRACKING_INTERVAL_DEFECTE
+            )
+
+            tracking_max = ordre.get(
+                "max",
+                TRACKING_MAX_DEFECTE
+            )
+
+            tracking_inici = time.ticks_ms()
+            tracking_actiu = True
+
+        elif cmd == "track_stop":
+            tracking_actiu = False
+
     except Exception as error:
-        pass
+        debug("Error processant ordre MQTT:", error)
 
 
 def executar_ota(fitxers, client):
@@ -227,16 +277,17 @@ def executar_ota(fitxers, client):
             client.disconnect()
             return
 
-    # Esborra l’ordre retained
     client.publish(TOPIC_ORDRES, b"", True)
     client.disconnect()
 
-    ota.set_update_flag()  # OTA preparada. Reinicia
+    ota.set_update_flag()
     Power.powerRestart()
 
 
 def main():
-    # Evita que el PSM anterior talli el GNSS mentre busca fix
+    global tracking_actiu
+    global tracking_inici
+
     pm.autosleep(0)
 
     if pm.get_psm_time()[0]:
@@ -245,14 +296,16 @@ def main():
     inici = time.ticks_ms()
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
+
     wdt.feed()
 
     if stage == 3 and state == 1:
+
         try:
             quecgnss.gnssEnable(0)
-
             xtra.actualitzar_si_cal()
-        except Exception as error:
+
+        except Exception:
             pass
 
         quecgnss.setPriority(0)
@@ -263,10 +316,20 @@ def main():
 
         else:
             inici = time.ticks_ms()
+
             posicio = obtenir_posicio()
+
             gnss_time = temps_transcorregut(inici)
+
             wdt.feed()
-            debug("Posició obtinguda en", gnss_time, "segons:", posicio)
+
+            debug(
+                "Posició obtinguda en",
+                gnss_time,
+                "segons:",
+                posicio
+            )
+
             quecgnss.gnssEnable(0)
 
         tau_demanat = tau_a_demanar()
@@ -277,7 +340,12 @@ def main():
             else (1, tau_demanat // 3600)
         )
 
-        pm.set_psm_time(unitat_tau, valor_tau, 0, ACTIVE_TIME // 2)
+        pm.set_psm_time(
+            unitat_tau,
+            valor_tau,
+            0,
+            ACTIVE_TIME // 2
+        )
 
         time.sleep(2)
 
@@ -298,11 +366,58 @@ def main():
         }
 
         try:
-            publicar_mqtt(posicio, status)
-            debug("Publicat MQTT posicio: ", posicio, "status:", status)
+            client = publicar_mqtt(posicio, status)
+
+            debug(
+                "Publicat MQTT posicio:",
+                posicio,
+                "status:",
+                status
+            )
+
             wdt.feed()
+
+            while tracking_actiu:
+
+                if time.ticks_diff(
+                    time.ticks_ms(),
+                    tracking_inici
+                ) >= tracking_max * 1000:
+                    tracking_actiu = False
+                    break
+
+                time.sleep(tracking_interval)
+
+                if not tracking_actiu:
+                    break
+
+                quecgnss.gnssEnable(1)
+
+                posicio = obtenir_posicio()
+
+                quecgnss.gnssEnable(0)
+
+                if posicio:
+                    publicar_posicio(
+                        client,
+                        posicio
+                    )
+
+                    debug(
+                        "Tracking posicio:",
+                        posicio
+                    )
+
+                else:
+                    debug("Tracking sense fix")
+
+                wdt.feed()
+
+            client.disconnect()
+            tracking_inici = None
+
         except Exception as error:
-            pass
+            debug("Error MQTT:", error)
 
     pm.autosleep(1)
     time.sleep(120)
