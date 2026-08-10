@@ -1,1 +1,0 @@
-print("OTA funciona")
