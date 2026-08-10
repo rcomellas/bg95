@@ -19,9 +19,13 @@ from usr import secrets
 # region Constants
 VERSIO = "1.0.2"
 DEBUG = True
-TAU_DEMANAT = 1800  # per tal que la xarxa em doni 60 minuts, en demano 30
-# segons. Per defecte 6 segons, que és el mínim que permet la xarxa. Si es vol més temps, cal demanar-ho a l'operador.
+
+TAU_CURT = 1800       # 30 min
+TAU_LLARG = 10800     # 3 h
+HORA_INICI_NIT = 0
+HORA_FINAL_NIT = 7
 ACTIVE_TIME = 6
+
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
 _thread.stack_size(16 * 1024)
@@ -104,6 +108,16 @@ def obtenir_senyal():
         return int(dades[2]), int(dades[4])
     except Exception:
         return None, None
+
+
+def tau_a_demanar():
+    hora_futura = (time.localtime()[3] + TAU_LLARG // 3600) % 24
+
+    return (
+        TAU_LLARG
+        if HORA_INICI_NIT <= hora_futura < HORA_FINAL_NIT
+        else TAU_CURT
+    )
 
 
 def obtenir_psm_negociat():
@@ -255,10 +269,12 @@ def main():
             debug("Posició obtinguda en", gnss_time, "segons:", posicio)
             quecgnss.gnssEnable(0)
 
+        tau_demanat = tau_a_demanar()
+
         unitat_tau, valor_tau = (
-            (5, TAU_DEMANAT // 60)
-            if TAU_DEMANAT < 3600
-            else (1, TAU_DEMANAT // 3600)
+            (5, tau_demanat // 60)
+            if tau_demanat < 3600
+            else (1, tau_demanat // 3600)
         )
 
         pm.set_psm_time(unitat_tau, valor_tau, 0, ACTIVE_TIME // 2)
@@ -271,14 +287,15 @@ def main():
         status = {
             "version": VERSIO,
             "bat": Power.getVbatt(),
-            "tau_req": TAU_DEMANAT,
+            "tau_req": tau_demanat,
             "tau_net": tau_net,
             "active_time": active_time,
             "net_time": net_time,
             "gnss_time": gnss_time,
             "fix": posicio is not None,
             "rsrp": rsrp,
-            "rsrq": rsrq}
+            "rsrq": rsrq
+        }
 
         try:
             publicar_mqtt(posicio, status)
