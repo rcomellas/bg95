@@ -1,0 +1,42 @@
+import checkNet
+import quecgnss
+
+from usr import xtra
+
+
+def mostra_estat(etiqueta):
+    try:
+        estat = quecgnss.get_state()
+    except Exception as error:
+        estat = "error: %s" % error
+
+    print(etiqueta, "-> get_state():", estat)
+
+
+def prova_descarrega(etiqueta):
+    print("----", etiqueta, "----")
+    ok = xtra.descarregar()
+    print("Descarrega OK?:", ok)
+    print()
+
+
+print("Esperant xarxa...")
+stage, state = checkNet.waitNetworkReady(30)
+print("Xarxa:", stage, state)
+
+if stage != 3 or state != 1:
+    print("Xarxa no llesta, aturo la prova")
+else:
+    mostra_estat("Abans de tocar res")
+
+    quecgnss.setPriority(0)
+    ret_init = quecgnss.init()
+    print("quecgnss.init() ret:", ret_init)
+
+    mostra_estat("Just despres de init()")
+
+    quecgnss.gnssEnable(0)
+
+    mostra_estat("Despres de gnssEnable(0)")
+
+    prova_descarrega("Descarrega amb estat actual")

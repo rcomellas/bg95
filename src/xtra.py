@@ -15,7 +15,10 @@ def enviar_at(comanda, espera=5):
         espera
     )
 
-    text = bytes(resposta).decode("utf-8", "ignore")
+    text = bytes(resposta).decode(
+        "utf-8",
+        "ignore"
+    ).replace("\x00", "")
 
     return ret, text
 
@@ -27,55 +30,93 @@ def obtenir_hores_restants():
     )
 
     if ret != 0:
+        print("XTRA info error. ret:", ret)
         return None
 
     try:
         inici = text.find('"xtra_info",')
 
         if inici == -1:
+            print("XTRA info no trobada:", text)
             return None
 
         fragment = text[inici:].split(",")
 
-        return int(fragment[1])
+        hores = int(fragment[1])
 
-    except Exception:
+        print("XTRA hores restants:", hores)
+
+        return hores
+
+    except Exception as error:
+        print("Error llegint XTRA info:", error)
+        print("Resposta:", text)
         return None
 
 
 def descarregar():
+    print("Iniciant descàrrega XTRA...")
+
     ret, text = enviar_at(
         'AT+QGPSCFG="xtra_download",1',
         30
     )
 
+    print("XTRA download ret:", ret)
+    print("XTRA download resposta:", text)
+
     if ret != 0:
+        print("Error iniciant descàrrega XTRA")
         return False
 
-    for _ in range(5):
+    for i in range(15):
         time.sleep(2)
 
         hores = obtenir_hores_restants()
 
-        if hores is not None:
+        print(
+            "XTRA comprovació",
+            i + 1,
+            "- hores:",
+            hores
+        )
+
+        if hores is not None and hores > HORES_MINIMES:
+            print("Descàrrega XTRA correcta")
             return True
+
+    print("Timeout esperant descàrrega XTRA")
 
     return False
 
 
 def actualitzar_si_cal():
-    """
-    Retorna:
-        "ok"          -> ja tenia dades XTRA vàlides, no calia descarregar
-        "descarregat" -> s'ha fet una descàrrega nova (cal marge abans del GNSS)
-        "error"       -> ha fallat la descàrrega
-    """
     hores = obtenir_hores_restants()
 
-    if hores is None or hores <= HORES_MINIMES:
+    if hores is None:
+        print("XTRA no disponible. Intentant descarregar...")
+
         if descarregar():
             return "descarregat"
-        else:
-            return "error"
+
+        return "error"
+
+    if hores <= HORES_MINIMES:
+        print(
+            "XTRA caduca aviat:",
+            hores,
+            "hores. Descarregant..."
+        )
+
+        if descarregar():
+            return "descarregat"
+
+        return "error"
+
+    print(
+        "XTRA correcta. Queden",
+        hores,
+        "hores"
+    )
 
     return "ok"
