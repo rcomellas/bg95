@@ -89,7 +89,36 @@ def obtenir_posicio():
 
                 return latitud, longitud, satel_lits
 
-        debug("Sense fix GNSS. Esperant 2 segons...")
+            if DEBUG:
+                print(
+                    "Sense fix GNSS:",
+                    time.ticks_diff(time.ticks_ms(), inici) // 1000,
+                    "segons", end=" "
+                )
+
+                cn0 = []
+
+                for linia in dades.split("\r\n"):
+                    if "GSV" in linia:
+                        camps = linia.split(",")
+
+                        for i in range(4, len(camps) - 3, 4):
+                            try:
+                                valor = int(camps[i + 3].split("*")[0])
+                                if valor > 0:
+                                    cn0.append(valor)
+                            except:
+                                pass
+
+                if cn0:
+                    print(
+                        "Sat:", len(cn0),
+                        "C/N0 mitjà:", sum(cn0) // len(cn0),
+                        "dB-Hz"
+                    )
+                else:
+                    print("Sat: 0 C/N0 mitjà: 0")
+
         time.sleep(2)
 
     return None
@@ -195,12 +224,18 @@ def connectar_mqtt():
         config.MQTT_HOST,
         port=config.MQTT_PORT,
         user=secrets.TOKEN_FLESPI_MQTT,
-        password=secrets.TOKEN_FLESPI_MQTT
+        password=secrets.TOKEN_FLESPI_MQTT,
+        reconn=False
+
     )
 
     client.set_callback(processar_ordre)
 
+    quecgnss.setPriority(1)
+    time.sleep(1)
+
     client.connect()
+
     client.subscribe(TOPIC_ORDRES, 0)
 
     _thread.start_new_thread(
@@ -355,7 +390,9 @@ def main():
             posicio
         )
 
-        quecgnss.gnssEnable(0)
+        # debug("Abans apagar GNSS")
+        # # quecgnss.gnssEnable(0)
+        # debug("GNSS apagat")
 
     try:
         client, mqtt_time = connectar_mqtt()
