@@ -1,6 +1,6 @@
 # region imports
 
-import time
+import utime
 import ujson
 import quecgnss
 import pm
@@ -55,9 +55,9 @@ tracking_inici = None
 def obtenir_posicio():
     debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
 
-    inici = time.ticks_ms()
+    inici = utime.ticks_ms()
 
-    while time.ticks_diff(time.ticks_ms(), inici) < config.TEMPS_MAXIM_FIX * 1000:
+    while utime.ticks_diff(utime.ticks_ms(), inici) < config.TEMPS_MAXIM_FIX * 1000:
         resultat = quecgnss.read(4096)
 
         if resultat != -1 and resultat[0] > 0:
@@ -92,7 +92,7 @@ def obtenir_posicio():
             if DEBUG:
                 print(
                     "Sense fix GNSS:",
-                    time.ticks_diff(time.ticks_ms(), inici) // 1000,
+                    utime.ticks_diff(utime.ticks_ms(), inici) // 1000,
                     "segons", end=" "
                 )
 
@@ -119,7 +119,7 @@ def obtenir_posicio():
                 else:
                     print("Sat: 0 C/N0 mitjà: 0")
 
-        time.sleep(2)
+        utime.sleep(2)
 
     return None
 
@@ -134,7 +134,7 @@ def convertir_coordenada(valor, hemisferi, graus):
 
 
 def temps_transcorregut(inici):
-    return time.ticks_diff(time.ticks_ms(), inici) // 1000
+    return utime.ticks_diff(utime.ticks_ms(), inici) // 1000
 
 
 def debug(*args):
@@ -166,7 +166,10 @@ def obtenir_senyal():
 
 
 def tau_a_demanar():
-    hora_futura = (time.localtime()[3] + TAU_LLARG // 3600) % 24
+    hora = utime.localtime()[3]
+    hora_futura = (hora + TAU_LLARG // 3600) % 24
+
+    debug("HORA RTC:", hora, "HORA FUTURA:", hora_futura)
 
     return (
         TAU_LLARG
@@ -217,7 +220,7 @@ def publicar_posicio(client, posicio):
 
 
 def connectar_mqtt():
-    inici = time.ticks_ms()
+    inici = utime.ticks_ms()
 
     client = MQTTClient(
         config.DEVICE_ID,
@@ -232,7 +235,7 @@ def connectar_mqtt():
     client.set_callback(processar_ordre)
 
     quecgnss.setPriority(1)
-    time.sleep(1)
+    utime.sleep(1)
 
     client.connect()
 
@@ -297,7 +300,7 @@ def processar_ordre(topic, missatge):
                 TRACKING_MAX_DEFECTE
             )
 
-            tracking_inici = time.ticks_ms()
+            tracking_inici = utime.ticks_ms()
             tracking_actiu = True
             ordre_rebuda = True
 
@@ -338,7 +341,7 @@ def main():
     if pm.get_psm_time()[0]:
         pm.set_psm_time(0)
 
-    inici = time.ticks_ms()
+    inici = utime.ticks_ms()
 
     stage, state = checkNet.waitNetworkReady(30)
 
@@ -348,7 +351,7 @@ def main():
 
     if stage != 3 or state != 1:
         pm.autosleep(1)
-        time.sleep(120)
+        utime.sleep(120)
         return
 
     if DEBUG:
@@ -373,7 +376,7 @@ def main():
         #     pass
         quecgnss.gnssEnable(1)
 
-        inici = time.ticks_ms()
+        inici = utime.ticks_ms()
 
         posicio = obtenir_posicio()
 
@@ -399,7 +402,7 @@ def main():
         debug("Error connectant MQTT:", error)
 
         pm.autosleep(1)
-        time.sleep(120)
+        utime.sleep(120)
         return
 
     try:
@@ -409,13 +412,13 @@ def main():
     except Exception as error:
         debug("Error publicant posició:", error)
 
-    time.sleep(1)
+    utime.sleep(1)
 
     while tracking_actiu:
         debug("Tracking actiu. Interval:",
               tracking_interval)
-        if time.ticks_diff(
-            time.ticks_ms(),
+        if utime.ticks_diff(
+            utime.ticks_ms(),
             tracking_inici
         ) >= tracking_max * 1000:
             debug("Final tracking: temps màxim")
@@ -435,14 +438,14 @@ def main():
             "segons"
         )
 
-        time.sleep(tracking_interval)
+        utime.sleep(tracking_interval)
 
         if not tracking_actiu:
             debug("Final tracking: track_stop")
             break
 
-        if time.ticks_diff(
-            time.ticks_ms(),
+        if utime.ticks_diff(
+            utime.ticks_ms(),
             tracking_inici
         ) >= tracking_max * 1000:
             debug("Final tracking: temps màxim")
@@ -451,7 +454,7 @@ def main():
 
         quecgnss.gnssEnable(1)
 
-        inici = time.ticks_ms()
+        inici = utime.ticks_ms()
 
         posicio = obtenir_posicio()
 
@@ -510,7 +513,7 @@ def main():
         ACTIVE_TIME // 2
     )
 
-    time.sleep(2)
+    utime.sleep(2)
 
     tau_net, active_time = obtenir_psm_negociat()
     rsrp, rsrq = obtenir_senyal()
@@ -518,6 +521,7 @@ def main():
     status = {
         "version": VERSIO,
         "bat": Power.getVbatt(),
+        "hora": utime.localtime(),
         "tau_req": tau_demanat,
         "tau_net": tau_net,
         "active_time": active_time,
@@ -553,7 +557,7 @@ def main():
 
     pm.autosleep(1)
 
-    time.sleep(120)
+    utime.sleep(120)
 
 
 main()
