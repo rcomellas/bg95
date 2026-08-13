@@ -2,29 +2,29 @@ import utime
 import pm
 import atcmd
 
-from usr import config
+TAU_CURT = 1800
+TAU_LLARG = 10800
+HORA_INICI_NIT = 0
+HORA_FINAL_NIT = 7
+ACTIVE_TIME = 6
+DEBUG = True
 
 
-def preparar_despertar():
-    pm.autosleep(0)
-
-    if pm.get_psm_time()[0]:
-        pm.set_psm_time(0)
+def debug(*args):
+    if DEBUG:
+        print(*args)
 
 
-def calcular_tau():
+def tau_a_demanar():
     hora = utime.localtime()[3]
+    hora_futura = (hora + TAU_LLARG // 3600) % 24
 
-    hora_futura = (
-        hora + config.TAU_LLARG // 3600
-    ) % 24
+    debug("HORA RTC:", hora, "HORA FUTURA:", hora_futura)
 
     return (
-        config.TAU_LLARG
-        if config.HORA_INICI_NIT
-        <= hora_futura
-        < config.HORA_FINAL_NIT
-        else config.TAU_CURT
+        TAU_LLARG
+        if HORA_INICI_NIT <= hora_futura < HORA_FINAL_NIT
+        else TAU_CURT
     )
 
 
@@ -41,10 +41,7 @@ def obtenir_psm_negociat():
     if ret != 0:
         return None, None
 
-    text = bytes(resposta).decode(
-        "utf-8", "ignore"
-    )
-
+    text = bytes(resposta).decode("utf-8", "ignore")
     valors = text.split('"')
 
     try:
@@ -54,8 +51,17 @@ def obtenir_psm_negociat():
         return None, None
 
 
+
+
+def preparar_despertar():
+    pm.autosleep(0)
+
+    if pm.get_psm_time()[0]:
+        pm.set_psm_time(0)
+
+
 def preparar_psm():
-    tau_demanat = calcular_tau()
+    tau_demanat = tau_a_demanar()
 
     unitat_tau, valor_tau = (
         (5, tau_demanat // 60)
@@ -67,7 +73,7 @@ def preparar_psm():
         unitat_tau,
         valor_tau,
         0,
-        config.ACTIVE_TIME // 2
+        ACTIVE_TIME // 2
     )
 
     utime.sleep(2)
