@@ -1,25 +1,24 @@
-from usr import gnss
-from usr import mqtt
-from usr import power
-
+from usr.gnss import *
+from usr.mqtt import *
+from usr.power import *
+from usr.app import *
+import usr.mqtt as mqtt
 
 preparar_sistema()
 
 esperar_xarxa()
 
-gnss.obtenir_fix()
+obtenir_fix()
 
-mqtt.connectar()
+mqtt.publicar(posicio)
 
-mqtt.publicar_posicio(client, posicio)
-
-while tracking_actiu:
+while mqtt.tracking_actiu:
     esperar()
-    gnss.obtenir_fix()
-    mqtt.publicar_posicio(client, posicio)
+    obtenir_fix()
+    mqtt.publicar(posicio)
 
 construir_status()
 
-mqtt.publicar_status()
+mqtt.publicar(status)
 
-power.entrar_psm(client)
+entrar_psm()
