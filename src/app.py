@@ -1,34 +1,22 @@
 import utime
-import checkNet
-from misc import Power
+import ujson
+from misc.Power import getVbatt
 
+from usr.config import VERSIO
 from usr import gnss
 from usr import mqtt
 from usr import power
 
 
-VERSIO = "1.0.4"
+fitxers_ota_pendents = None
 
 
-def preparar_sistema():
-    power.preparar_despertar()
+def debug(*args):
+    if config.DEBUG:
+        print(*args)
 
 
-def esperar_xarxa():
-    inici = utime.ticks_ms()
-
-    stage, state = checkNet.waitNetworkReady(30)
-
-    mqtt.net_time = utime.ticks_diff(
-        utime.ticks_ms(),
-        inici
-    ) // 1000
-
-    if stage != 3 or state != 1:
-        power.dormir_sense_mqtt()
-
-
-def esperar():
+def esperar_tracking():
     utime.sleep(mqtt.tracking_interval)
 
     if mqtt.tracking_inici is not None:
@@ -39,13 +27,17 @@ def esperar():
             mqtt.tracking_actiu = False
 
 
+def ota_pendent():
+    return fitxers_ota_pendents
+
+
 def construir_status():
     tau_demanat, tau_net, active_time = power.preparar_psm()
     rsrp, rsrq = mqtt.obtenir_senyal_xarxa()
 
     return {
-        "version": VERSIO,
-        "bat": Power.getVbatt(),
+        "version": config.VERSIO,
+        "bat": getVbatt(),
         "hora": utime.localtime(),
         "tau_req": tau_demanat,
         "tau_net": tau_net,

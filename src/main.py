@@ -1,24 +1,32 @@
 from usr.gnss import *
-from usr.mqtt import *
 from usr.power import *
 from usr.app import *
-import usr.mqtt as mqtt
+from usr.mqtt import *
 
-preparar_sistema()
+import usr.ota as ota
+import utime
 
-esperar_xarxa()
+despertar()
 
-obtenir_fix()
+connectar_xarxa()
 
-mqtt.publicar(posicio)
+posicio = obtenir_fix()
+# posicio = (42.123456, 1.123456, 8)
 
-while mqtt.tracking_actiu:
-    esperar()
-    obtenir_fix()
-    mqtt.publicar(posicio)
+connectar_mqtt()
+publicar_posicio(posicio)
 
-construir_status()
+while tracking_actiu():
+    esperar_tracking()
+    # posicio = obtenir_fix()
+    posicio = (42.123456, 1.123456, 8)
+    publicar_posicio(posicio)
 
-mqtt.publicar(status)
+if ota_pendent():
+    ota.actualitzar_programa()
 
-entrar_psm()
+# status = construir_status()
+
+# publicar_status(client, status)
+
+# dormir(client)

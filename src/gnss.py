@@ -3,13 +3,10 @@ import quecgnss
 import atcmd
 
 from usr import config
+from usr.utils import debug
 
-DEBUG = True
-
-
-def debug(*args):
-    if DEBUG:
-        print(*args)
+gnss_time = 0
+ultima_posicio = None
 
 
 def convertir_coordenada(valor, hemisferi, graus):
@@ -22,7 +19,7 @@ def convertir_coordenada(valor, hemisferi, graus):
 
 
 def mostrar_info_xtra():
-    if not DEBUG:
+    if not config.DEBUG:
         return
 
     resposta = bytearray(100)
@@ -82,7 +79,7 @@ def obtenir_posicio():
 
                 return latitud, longitud, satel_lits
 
-            if DEBUG:
+            if config.DEBUG:
                 print(
                     "Sense fix GNSS:",
                     utime.ticks_diff(utime.ticks_ms(), inici) // 1000,
@@ -122,19 +119,24 @@ def obtenir_posicio():
 
 
 def obtenir_fix():
+    global gnss_time
+    global ultima_posicio
+
     mostrar_info_xtra()
 
     quecgnss.gnssEnable(0)
     quecgnss.setPriority(0)
 
     if quecgnss.init() != 0:
-        return None, 0
+        gnss_time = 0
+        ultima_posicio = None
+        return None
 
     quecgnss.gnssEnable(1)
 
     inici = utime.ticks_ms()
 
-    posicio = obtenir_posicio()
+    ultima_posicio = obtenir_posicio()
 
     gnss_time = utime.ticks_diff(
         utime.ticks_ms(),
@@ -145,10 +147,10 @@ def obtenir_fix():
         "Posició obtinguda en",
         gnss_time,
         "segons:",
-        posicio
+        ultima_posicio
     )
 
-    return posicio, gnss_time
+    return ultima_posicio
 
 
 def apagar():

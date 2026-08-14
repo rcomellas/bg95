@@ -3,9 +3,10 @@ import pm
 import atcmd
 
 from usr import config
+from usr import gnss
 
 
-def preparar_despertar():
+def despertar():
     pm.autosleep(0)
 
     if pm.get_psm_time()[0]:
@@ -26,6 +27,29 @@ def calcular_tau():
         < config.HORA_FINAL_NIT
         else config.TAU_CURT
     )
+
+
+def preparar_psm():
+    tau_demanat = calcular_tau()
+
+    unitat_tau, valor_tau = (
+        (5, tau_demanat // 60)
+        if tau_demanat < 3600
+        else (1, tau_demanat // 3600)
+    )
+
+    pm.set_psm_time(
+        unitat_tau,
+        valor_tau,
+        0,
+        config.ACTIVE_TIME // 2
+    )
+
+    utime.sleep(2)
+
+    tau_net, active_time = obtenir_psm_negociat()
+
+    return tau_demanat, tau_net, active_time
 
 
 def obtenir_psm_negociat():
@@ -54,35 +78,11 @@ def obtenir_psm_negociat():
         return None, None
 
 
-def preparar_psm():
-    tau_demanat = calcular_tau()
+def dormir(client=None):
+    gnss.apagar()
 
-    unitat_tau, valor_tau = (
-        (5, tau_demanat // 60)
-        if tau_demanat < 3600
-        else (1, tau_demanat // 3600)
-    )
+    if client:
+        client.disconnect()
 
-    pm.set_psm_time(
-        unitat_tau,
-        valor_tau,
-        0,
-        config.ACTIVE_TIME // 2
-    )
-
-    utime.sleep(2)
-
-    tau_net, active_time = obtenir_psm_negociat()
-
-    return tau_demanat, tau_net, active_time
-
-
-def dormir_sense_mqtt():
-    pm.autosleep(1)
-    utime.sleep(120)
-
-
-def entrar_psm(client):
-    client.disconnect()
     pm.autosleep(1)
     utime.sleep(120)
