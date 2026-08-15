@@ -1,9 +1,9 @@
 import utime
 import pm
 import atcmd
+import quecgnss
 
 from usr import config
-from usr import gnss
 
 
 def despertar():
@@ -79,7 +79,7 @@ def obtenir_psm_negociat():
 
 
 def dormir(client=None):
-    gnss.apagar()
+    quecgnss.gnssEnable(0)
 
     if client:
         client.disconnect()

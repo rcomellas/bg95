@@ -45,6 +45,8 @@ def connectar_mqtt():
     global mqtt_time
     global client
 
+    connectar_xarxa()
+
     inici = utime.ticks_ms()
     client = MQTTClient(
         config.DEVICE_ID,
@@ -63,10 +65,10 @@ def connectar_mqtt():
     client.connect()
     client.subscribe(TOPIC_ORDRES, 0)
 
-    # _thread.start_new_thread(
-    #     escoltar,
-    #     ()
-    # )
+    _thread.start_new_thread(
+        escoltar,
+        ()
+    )
 
     mqtt_time = temps_transcorregut(inici)
 

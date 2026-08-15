@@ -9,36 +9,22 @@ gnss_time = 0
 ultima_posicio = None
 
 
-def convertir_coordenada(valor, hemisferi, graus):
-    decimal = float(valor[:graus]) + float(valor[graus:]) / 60
-
-    if hemisferi == "S" or hemisferi == "W":
-        decimal = -decimal
-
-    return round(decimal, 6)
-
-
-def mostrar_info_xtra():
-    if not config.DEBUG:
-        return
-
-    resposta = bytearray(100)
-
-    atcmd.sendSync(
-        'AT+QGPSCFG="xtra_info"\r\n',
-        resposta,
-        "",
-        5
-    )
-
-    text = bytes(resposta).decode(
-        "utf-8", "ignore"
-    ).replace("\x00", "").strip()
-
-    debug("XTRA info:", text)
-
-
 def obtenir_posicio():
+    global gnss_time
+    global ultima_posicio
+
+    mostrar_info_xtra()
+
+    quecgnss.gnssEnable(0)
+    quecgnss.setPriority(0)
+
+    if quecgnss.init() != 0:
+        gnss_time = 0
+        ultima_posicio = None
+        return None
+
+    quecgnss.gnssEnable(1)
+
     debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
 
     inici = utime.ticks_ms()
@@ -77,12 +63,33 @@ def obtenir_posicio():
                 longitud = convertir_coordenada(rmc[5], rmc[6], 3)
                 satel_lits = int(gga[7]) if gga and gga[7] else 0
 
-                return latitud, longitud, satel_lits
+                ultima_posicio = (
+                    latitud,
+                    longitud,
+                    satel_lits
+                )
+
+                gnss_time = utime.ticks_diff(
+                    utime.ticks_ms(),
+                    inici
+                ) // 1000
+
+                debug(
+                    "Posició obtinguda en",
+                    gnss_time,
+                    "segons:",
+                    ultima_posicio
+                )
+
+                return ultima_posicio
 
             if config.DEBUG:
                 print(
                     "Sense fix GNSS:",
-                    utime.ticks_diff(utime.ticks_ms(), inici) // 1000,
+                    utime.ticks_diff(
+                        utime.ticks_ms(),
+                        inici
+                    ) // 1000,
                     "segons",
                     end=" "
                 )
@@ -95,7 +102,9 @@ def obtenir_posicio():
 
                         for i in range(4, len(camps) - 3, 4):
                             try:
-                                valor = int(camps[i + 3].split("*")[0])
+                                valor = int(
+                                    camps[i + 3].split("*")[0]
+                                )
 
                                 if valor > 0:
                                     cn0.append(valor)
@@ -105,43 +114,25 @@ def obtenir_posicio():
 
                 if cn0:
                     print(
-                        "Sat:", len(cn0),
+                        "Sat:",
+                        len(cn0),
                         "C/N0 mitjà:",
                         sum(cn0) // len(cn0),
                         "dB-Hz"
                     )
                 else:
-                    print("Sat: 0 C/N0 mitjà: 0")
+                    print(
+                        "Sat: 0 C/N0 mitjà: 0"
+                    )
 
         utime.sleep(2)
-
-    return None
-
-
-def obtenir_fix():
-    global gnss_time
-    global ultima_posicio
-
-    mostrar_info_xtra()
-
-    quecgnss.gnssEnable(0)
-    quecgnss.setPriority(0)
-
-    if quecgnss.init() != 0:
-        gnss_time = 0
-        ultima_posicio = None
-        return None
-
-    quecgnss.gnssEnable(1)
-
-    inici = utime.ticks_ms()
-
-    ultima_posicio = obtenir_posicio()
 
     gnss_time = utime.ticks_diff(
         utime.ticks_ms(),
         inici
     ) // 1000
+
+    ultima_posicio = None
 
     debug(
         "Posició obtinguda en",
@@ -150,8 +141,33 @@ def obtenir_fix():
         ultima_posicio
     )
 
-    return ultima_posicio
+    return None
 
 
-def apagar():
-    quecgnss.gnssEnable(0)
+def convertir_coordenada(valor, hemisferi, graus):
+    decimal = float(valor[:graus]) + float(valor[graus:]) / 60
+
+    if hemisferi == "S" or hemisferi == "W":
+        decimal = -decimal
+
+    return round(decimal, 6)
+
+
+def mostrar_info_xtra():
+    if not config.DEBUG:
+        return
+
+    resposta = bytearray(100)
+
+    atcmd.sendSync(
+        'AT+QGPSCFG="xtra_info"\r\n',
+        resposta,
+        "",
+        5
+    )
+
+    text = bytes(resposta).decode(
+        "utf-8", "ignore"
+    ).replace("\x00", "").strip()
+
+    debug("XTRA info:", text)
