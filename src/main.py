@@ -1,29 +1,26 @@
 from usr.gnss import *
-from usr.power import *
-from usr.app import *
+from usr.psm import *
 from usr.mqtt import *
-
 
 despertar()
 
 posicio = obtenir_posicio()
-# posicio = (42.123456, 1.123456, 8)
+# posicio = (42.123456, 1.123456, 8)  # posicio de prova
 
 connectar_mqtt()
-
+# connectar_xarxa()
 publicar_posicio(posicio)
 
 while tracking_actiu():
     esperar_tracking()
-    # posicio = obtenir_posicio()
-    posicio = (42.123456, 1.123456, 8)
+    posicio = obtenir_posicio()
     publicar_posicio(posicio)
 
 if ota_pendent():
     actualitzar_programa()
 
-status = construir_status()
-
-publicar_status(status)
+preparar_psm()
+# desconnectar_mqtt()
+publicar_status()
 
 dormir()

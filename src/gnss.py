@@ -3,10 +3,16 @@ import quecgnss
 import atcmd
 
 from usr import config
-from usr.utils import debug
+from usr.utils import debug, temps_transcorregut
+
 
 gnss_time = 0
 ultima_posicio = None
+
+estat_tracking = False
+tracking_inici = None
+tracking_interval = config.TRACKING_INTERVAL_DEFECTE
+tracking_max = config.TRACKING_MAX_DEFECTE
 
 
 def obtenir_posicio():
@@ -15,24 +21,25 @@ def obtenir_posicio():
 
     mostrar_info_xtra()
 
+    # Prioritat GNSS
     quecgnss.gnssEnable(0)
     quecgnss.setPriority(0)
 
     if quecgnss.init() != 0:
         gnss_time = 0
         ultima_posicio = None
+
+        preparar_lte()
+
         return None
 
     quecgnss.gnssEnable(1)
 
-    debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
+    debug("Obtenint posició...")
 
     inici = utime.ticks_ms()
 
-    while utime.ticks_diff(
-        utime.ticks_ms(),
-        inici
-    ) < config.TEMPS_MAXIM_FIX * 1000:
+    while temps_transcorregut(inici) < config.TEMPS_MAXIM_FIX:
 
         resultat = quecgnss.read(4096)
 
@@ -46,6 +53,7 @@ def obtenir_posicio():
             gga = None
 
             for linia in dades.split("\r\n"):
+
                 if linia.startswith("$GPRMC"):
                     camps = linia.split(",")
 
@@ -59,9 +67,23 @@ def obtenir_posicio():
                         gga = camps
 
             if rmc:
-                latitud = convertir_coordenada(rmc[3], rmc[4], 2)
-                longitud = convertir_coordenada(rmc[5], rmc[6], 3)
-                satel_lits = int(gga[7]) if gga and gga[7] else 0
+                latitud = convertir_coordenada(
+                    rmc[3],
+                    rmc[4],
+                    2
+                )
+
+                longitud = convertir_coordenada(
+                    rmc[5],
+                    rmc[6],
+                    3
+                )
+
+                satel_lits = (
+                    int(gga[7])
+                    if gga and gga[7]
+                    else 0
+                )
 
                 ultima_posicio = (
                     latitud,
@@ -69,10 +91,7 @@ def obtenir_posicio():
                     satel_lits
                 )
 
-                gnss_time = utime.ticks_diff(
-                    utime.ticks_ms(),
-                    inici
-                ) // 1000
+                gnss_time = temps_transcorregut(inici)
 
                 debug(
                     "Posició obtinguda en",
@@ -81,76 +100,91 @@ def obtenir_posicio():
                     ultima_posicio
                 )
 
+                preparar_lte()
+
                 return ultima_posicio
 
-            if config.DEBUG:
-                print(
-                    "Sense fix GNSS:",
-                    utime.ticks_diff(
-                        utime.ticks_ms(),
-                        inici
-                    ) // 1000,
-                    "segons",
-                    end=" "
-                )
-
-                cn0 = []
-
-                for linia in dades.split("\r\n"):
-                    if "GSV" in linia:
-                        camps = linia.split(",")
-
-                        for i in range(4, len(camps) - 3, 4):
-                            try:
-                                valor = int(
-                                    camps[i + 3].split("*")[0]
-                                )
-
-                                if valor > 0:
-                                    cn0.append(valor)
-
-                            except:
-                                pass
-
-                if cn0:
-                    print(
-                        "Sat:",
-                        len(cn0),
-                        "C/N0 mitjà:",
-                        sum(cn0) // len(cn0),
-                        "dB-Hz"
-                    )
-                else:
-                    print(
-                        "Sat: 0 C/N0 mitjà: 0"
-                    )
+            mostrar_senyal_gnss(
+                dades,
+                temps_transcorregut(inici)
+            )
 
         utime.sleep(2)
 
-    gnss_time = utime.ticks_diff(
-        utime.ticks_ms(),
-        inici
-    ) // 1000
-
+    gnss_time = temps_transcorregut(inici)
     ultima_posicio = None
 
     debug(
-        "Posició obtinguda en",
+        "Sense posició després de",
         gnss_time,
-        "segons:",
-        ultima_posicio
+        "segons"
     )
+
+    preparar_lte()
 
     return None
 
 
+def preparar_lte():
+    quecgnss.gnssEnable(0)
+    quecgnss.setPriority(1)
+
+
 def convertir_coordenada(valor, hemisferi, graus):
-    decimal = float(valor[:graus]) + float(valor[graus:]) / 60
+    decimal = (
+        float(valor[:graus])
+        + float(valor[graus:]) / 60
+    )
 
     if hemisferi == "S" or hemisferi == "W":
         decimal = -decimal
 
     return round(decimal, 6)
+
+
+def mostrar_senyal_gnss(dades, temps):
+    if not config.DEBUG:
+        return
+
+    cn0 = []
+
+    for linia in dades.split("\r\n"):
+
+        if "GSV" in linia:
+            camps = linia.split(",")
+
+            for i in range(4, len(camps) - 3, 4):
+
+                try:
+                    valor = int(
+                        camps[i + 3].split("*")[0]
+                    )
+
+                    if valor > 0:
+                        cn0.append(valor)
+
+                except Exception:
+                    pass
+
+    if cn0:
+        print(
+            "Sense fix GNSS:",
+            temps,
+            "segons",
+            "Sat:",
+            len(cn0),
+            "C/N0 mitjà:",
+            sum(cn0) // len(cn0),
+            "dB-Hz"
+        )
+
+    else:
+        print(
+            "Sense fix GNSS:",
+            temps,
+            "segons",
+            "Sat: 0 C/N0 mitjà: 0"
+        )
 
 
 def mostrar_info_xtra():
@@ -167,7 +201,32 @@ def mostrar_info_xtra():
     )
 
     text = bytes(resposta).decode(
-        "utf-8", "ignore"
-    ).replace("\x00", "").strip()
+        "utf-8",
+        "ignore"
+    ).replace(
+        "\x00",
+        ""
+    ).strip()
 
-    debug("XTRA info:", text)
+    print(
+        "XTRA info:",
+        text
+    )
+
+
+def esperar_tracking():
+    global estat_tracking
+
+    utime.sleep(tracking_interval)
+
+    if tracking_inici is not None:
+
+        if (
+            temps_transcorregut(tracking_inici)
+            >= tracking_max
+        ):
+            estat_tracking = False
+
+
+def tracking_actiu():
+    return estat_tracking

@@ -1,11 +1,11 @@
 import utime
 import ujson
-from misc.Power import getVbatt
+from misc import Power
 
-from usr.config import VERSIO
+from usr import config
 from usr import gnss
 from usr import mqtt
-from usr import power
+from usr import psm
 
 
 fitxers_ota_pendents = None
@@ -32,12 +32,12 @@ def ota_pendent():
 
 
 def construir_status():
-    tau_demanat, tau_net, active_time = power.preparar_psm()
+    tau_demanat, tau_net, active_time = psm.preparar_psm()
     rsrp, rsrq = mqtt.obtenir_senyal_xarxa()
 
     return {
         "version": config.VERSIO,
-        "bat": getVbatt(),
+        "bat": Power.getVbatt(),
         "hora": utime.localtime(),
         "tau_req": tau_demanat,
         "tau_net": tau_net,

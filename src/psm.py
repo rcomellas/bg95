@@ -4,13 +4,18 @@ import atcmd
 import quecgnss
 
 from usr import config
+from usr.utils import debug
+
+tau_demanat = None
+tau_net = None
+active_time = None
 
 
 def despertar():
     pm.autosleep(0)
 
-    if pm.get_psm_time()[0]:
-        pm.set_psm_time(0)
+    # if pm.get_psm_time()[0]:
+    #     pm.set_psm_time(0)
 
 
 def calcular_tau():
@@ -30,6 +35,10 @@ def calcular_tau():
 
 
 def preparar_psm():
+    global tau_demanat
+    global tau_net
+    global active_time
+
     tau_demanat = calcular_tau()
 
     unitat_tau, valor_tau = (
@@ -48,8 +57,6 @@ def preparar_psm():
     utime.sleep(2)
 
     tau_net, active_time = obtenir_psm_negociat()
-
-    return tau_demanat, tau_net, active_time
 
 
 def obtenir_psm_negociat():
@@ -78,11 +85,18 @@ def obtenir_psm_negociat():
         return None, None
 
 
-def dormir(client=None):
+def dormir():
     quecgnss.gnssEnable(0)
 
-    if client:
-        client.disconnect()
+    resposta = bytearray(100)
 
+    atcmd.sendSync(
+        "AT+QIDEACT=1\r\n",
+        resposta,
+        "",
+        10
+    )
+    debug("A dormir...")
     pm.autosleep(1)
+
     utime.sleep(120)
