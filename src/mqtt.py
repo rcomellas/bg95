@@ -1,7 +1,7 @@
 import app_fota
 import quecgnss
-import dataCall
-import atcmd
+import checkNet
+import net
 import utime
 import ujson
 import _thread
@@ -9,9 +9,8 @@ import _thread
 from umqtt import MQTTClient
 from misc import Power
 
-from usr import config, gnss, secrets, psm
-from usr.utils import debug, temps_transcorregut
-from usr.psm import dormir
+from usr import config,  gnss, secrets, psm
+from usr.utils import debug, temps_transcorregut, watchdog
 
 
 ordre_rebuda = False
@@ -28,34 +27,32 @@ def connectar_xarxa():
     quecgnss.gnssEnable(0)
     quecgnss.setPriority(1)
 
-    inici = utime.ticks_ms()
+    while True:
+        stage, state = 0, 0
+        watchdog.feed()
 
-    debug("Connectant xarxa...")
-
-    while temps_transcorregut(inici) < 120:
-        lte = dataCall.getInfo(1, 0)
-
-        debug(lte)
-
-        if lte[2][0] == 1:
-            net_time = temps_transcorregut(inici)
-            debug("Xarxa connectada")
+        if stage == 3 and state == 1:
             return
 
-        utime.sleep(1)
+        net.setModemFun(0)
 
-    net_time = temps_transcorregut(inici)
+        utime.sleep(config.TEMPS_REINTENT_XARXA)
 
-    debug("No s'ha pogut connectar a la xarxa")
-
-    dormir()
+        net.setModemFun(1)
 
 
 def connectar_mqtt():
-    global client
     global mqtt_time
+    global client
 
-    connectar_xarxa()
+    stage, state = checkNet.waitNetworkReady(config.TEMPS_INTENT_XARXA)
+
+    if not (stage == 3 and state == 1):
+        debug("Xarxa no disponible")
+
+        while True:
+            watchdog.feed()
+            utime.sleep(1)
 
     inici = utime.ticks_ms()
 
@@ -68,12 +65,12 @@ def connectar_mqtt():
         reconn=False
     )
 
-    debug("Connectant MQTT...")
-    client.connect()
-    debug("MQTT connectat")
+    client.set_callback(processar_ordre)
 
-    # client.disconnect()
-    # debug("MQTT desconnectat")
+    client.connect()
+    client.subscribe(config.TOPIC_ORDRES, 0)
+
+    _thread.start_new_thread(escoltar, ())
 
     mqtt_time = temps_transcorregut(inici)
 
@@ -105,7 +102,7 @@ def publicar_status():
     status = {
         "version": config.VERSIO,
         "bat": Power.getVbatt(),
-        "hora": utime.localtime(),
+        # "hora": utime.localtime(),
         "tau_req": psm.tau_demanat,
         "tau_net": psm.tau_net,
         "active_time": psm.active_time,
@@ -130,6 +127,7 @@ def escoltar():
     global ordre_rebuda
 
     while True:
+
         try:
             client.wait_msg()
 
@@ -204,36 +202,12 @@ def processar_ordre(topic, missatge):
 
 
 def obtenir_senyal_xarxa():
-    resposta = bytearray(100)
+    senyal = net.getSignal()
 
-    ret = atcmd.sendSync(
-        "AT+QCSQ\r\n",
-        resposta,
-        "",
-        2
-    )
-
-    if ret != 0:
+    if senyal == -1:
         return None, None
 
-    text = bytes(resposta).decode(
-        "utf-8",
-        "ignore"
-    ).replace(
-        "\x00",
-        ""
-    )
-
-    try:
-        dades = text.split(":")[1].strip().split(",")
-
-        return (
-            int(dades[2]),
-            int(dades[4])
-        )
-
-    except Exception:
-        return None, None
+    return senyal[1][1], senyal[1][2]
 
 
 def ota_pendent():

@@ -3,7 +3,7 @@ import quecgnss
 import atcmd
 
 from usr import config
-from usr.utils import debug, temps_transcorregut
+from usr.utils import debug, temps_transcorregut, watchdog
 
 
 gnss_time = 0
@@ -40,6 +40,7 @@ def obtenir_posicio():
     inici = utime.ticks_ms()
 
     while temps_transcorregut(inici) < config.TEMPS_MAXIM_FIX:
+        watchdog.feed()
 
         resultat = quecgnss.read(4096)
 
@@ -216,7 +217,7 @@ def mostrar_info_xtra():
 
 def esperar_tracking():
     global estat_tracking
-
+    watchdog.feed()
     utime.sleep(tracking_interval)
 
     if tracking_inici is not None:

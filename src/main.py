@@ -1,6 +1,7 @@
-from usr.gnss import *
-from usr.psm import *
 from usr.mqtt import *
+from usr.psm import *
+from usr.gnss import *
+
 
 despertar()
 

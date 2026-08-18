@@ -1,5 +1,8 @@
 import utime
 from usr import config
+from machine import WDT
+
+watchdog = WDT(120)
 
 
 def debug(*args):

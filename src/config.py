@@ -5,6 +5,10 @@ VERSIO = "1.0.5"
 
 DEBUG = True
 
+# XARXA
+TEMPS_INTENT_XARXA = 12
+TEMPS_REINTENT_XARXA = 30
+
 # MQTT
 MQTT_HOST = "mqtt.flespi.io"
 MQTT_PORT = 1883
@@ -18,7 +22,7 @@ TOPIC_ORDRES = b"bg95/command"
 TEMPS_MAXIM_FIX = 15  # segons
 
 # PSM
-TAU_CURT = 1800  # en segons
+TAU_CURT = 2300  # en segons
 TAU_LLARG = 10800  # en segons
 ACTIVE_TIME = 0  # en segons
 HORA_INICI_NIT = 0

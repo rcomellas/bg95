@@ -25,13 +25,7 @@ def calcular_tau():
         hora + config.TAU_LLARG // 3600
     ) % 24
 
-    return (
-        config.TAU_LLARG
-        if config.HORA_INICI_NIT
-        <= hora_futura
-        < config.HORA_FINAL_NIT
-        else config.TAU_CURT
-    )
+    return (config.TAU_LLARG if config.HORA_INICI_NIT <= hora_futura < config.HORA_FINAL_NIT else config.TAU_CURT)
 
 
 def preparar_psm():
@@ -39,7 +33,8 @@ def preparar_psm():
     global tau_net
     global active_time
 
-    tau_demanat = calcular_tau()
+    tau_demanat = config.TAU_CURT
+    # tau_demanat = calcular_tau()
 
     unitat_tau, valor_tau = (
         (5, tau_demanat // 60)
