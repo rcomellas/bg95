@@ -1,7 +1,7 @@
-"""Configuració del tracker."""
+""" Configuració del tracker """
 
 DEVICE_ID = "BG95"
-VERSIO = "1.0.5"
+VERSIO = "1.0.6"
 
 DEBUG = True
 
@@ -35,3 +35,10 @@ TRACKING_MAX_DEFECTE = 600  # en segons
 
 # OTA
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
+
+# LOG ERRORS
+FITXER_LOG = "/usr/bg95.error.log"
+TOPIC_LOG = b"bg95/log"
+
+# ALTRES
+TEMPS_WATCHDOG = 120

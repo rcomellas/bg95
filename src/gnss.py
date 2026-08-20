@@ -1,10 +1,9 @@
-import utime
-import quecgnss
-import atcmd
+""" Localització amb mòdul gnss """
+
+import utime, quecgnss, atcmd
 
 from usr import config
-from usr.utils import debug, temps_transcorregut, watchdog
-
+from usr.utils import *
 
 gnss_time = 0
 ultima_posicio = None
@@ -18,8 +17,6 @@ tracking_max = config.TRACKING_MAX_DEFECTE
 def obtenir_posicio():
     global gnss_time
     global ultima_posicio
-
-    mostrar_info_xtra()
 
     # Prioritat GNSS
     quecgnss.gnssEnable(0)
@@ -35,6 +32,7 @@ def obtenir_posicio():
 
     quecgnss.gnssEnable(1)
 
+    mostrar_info_xtra()
     debug("Obtenint posició...")
 
     inici = utime.ticks_ms()
@@ -215,19 +213,21 @@ def mostrar_info_xtra():
     )
 
 
-def esperar_tracking():
-    global estat_tracking
-    watchdog.feed()
-    utime.sleep(tracking_interval)
-
-    if tracking_inici is not None:
-
-        if (
-            temps_transcorregut(tracking_inici)
-            >= tracking_max
-        ):
-            estat_tracking = False
-
-
 def tracking_actiu():
     return estat_tracking
+
+
+def esperar_tracking():
+    global estat_tracking
+
+    if temps_transcorregut(tracking_inici) + tracking_interval > tracking_max:
+        estat_tracking = False
+        return
+
+    if tracking_interval + 5 >= config.TEMPS_WATCHDOG:
+        estat_tracking = False
+        log("Tracking: tracking interval > Watchdog timer")
+        return
+
+    watchdog.feed()
+    utime.sleep(tracking_interval)

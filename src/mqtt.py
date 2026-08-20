@@ -1,44 +1,18 @@
-import app_fota
-import quecgnss
-import checkNet
-import net
-import utime
-import ujson
-import _thread
+""" Gestió MQTT: enviament i recepcio """
 
+import app_fota, checkNet, net, utime
+import ujson,_thread
 from umqtt import MQTTClient
 from misc import Power
 
 from usr import config,  gnss, secrets, psm
-from usr.utils import debug, temps_transcorregut, watchdog
-
+from usr.utils import *
 
 ordre_rebuda = False
 fitxers_ota_pendents = None
 
-net_time = 0
 mqtt_time = 0
 client = None
-
-
-def connectar_xarxa():
-    global net_time
-
-    quecgnss.gnssEnable(0)
-    quecgnss.setPriority(1)
-
-    while True:
-        stage, state = 0, 0
-        watchdog.feed()
-
-        if stage == 3 and state == 1:
-            return
-
-        net.setModemFun(0)
-
-        utime.sleep(config.TEMPS_REINTENT_XARXA)
-
-        net.setModemFun(1)
 
 
 def connectar_mqtt():
@@ -48,12 +22,9 @@ def connectar_mqtt():
     stage, state = checkNet.waitNetworkReady(config.TEMPS_INTENT_XARXA)
 
     if not (stage == 3 and state == 1):
-        debug("Xarxa no disponible")
-
-        while True:
-            watchdog.feed()
-            utime.sleep(1)
-
+        log("MQTT: xarxa no disponible")
+        return None
+    
     inici = utime.ticks_ms()
 
     client = MQTTClient(
@@ -67,15 +38,25 @@ def connectar_mqtt():
 
     client.set_callback(processar_ordre)
 
-    client.connect()
-    client.subscribe(config.TOPIC_ORDRES, 0)
+    try:
+        client.connect()
+        client.subscribe(config.TOPIC_ORDRES, 0)
+
+    except Exception as error:
+        log("MQTT connect: {}".format(error))
+        client = None
+        return None
 
     _thread.start_new_thread(escoltar, ())
 
     mqtt_time = temps_transcorregut(inici)
 
+    return client
 
 def publicar_posicio(posicio):
+    if not client:
+        return
+
     if posicio:
         latitud, longitud, satel_lits = posicio
 
@@ -90,13 +71,13 @@ def publicar_posicio(posicio):
             True
         )
 
-        debug(
-            "Publicada posició:",
-            posicio
-        )
+        debug("Publicada posició:", posicio)
 
 
 def publicar_status():
+    if not client:
+        return
+
     rsrp, rsrq = obtenir_senyal_xarxa()
 
     status = {
@@ -106,7 +87,6 @@ def publicar_status():
         "tau_req": psm.tau_demanat,
         "tau_net": psm.tau_net,
         "active_time": psm.active_time,
-        "net_time": net_time,
         "gnss_time": gnss.gnss_time,
         "mqtt_time": mqtt_time,
         "fix": gnss.ultima_posicio is not None,
@@ -120,7 +100,14 @@ def publicar_status():
         True
     )
     debug("Status publicat:", status)
-    client.disconnect()
+    registre = llegir_log()
+
+    if registre:
+        client.publish(config.TOPIC_LOG, registre, False)
+        netejar_log()
+
+
+    desconnectar_mqtt()
 
 
 def escoltar():
@@ -141,11 +128,7 @@ def escoltar():
                 ordre_rebuda = False
 
         except Exception as error:
-            debug(
-                "Escolta MQTT aturada:",
-                error
-            )
-
+            debug("Escolta MQTT aturada:", error)
             break
 
 
@@ -157,10 +140,7 @@ def processar_ordre(topic, missatge):
         return
 
     try:
-        debug(
-            "Ordre MQTT rebuda:",
-            missatge
-        )
+        debug("Ordre MQTT rebuda:", missatge)
 
         ordre = ujson.loads(missatge)
         cmd = ordre.get("cmd")
@@ -195,10 +175,7 @@ def processar_ordre(topic, missatge):
             ordre_rebuda = True
 
     except Exception as error:
-        debug(
-            "Error processant ordre MQTT:",
-            error
-        )
+        log("MQTT: {}".format(error))
 
 
 def obtenir_senyal_xarxa():
@@ -224,10 +201,11 @@ def actualitzar_programa():
         )
 
         if resultat != 0:
-            client.disconnect()
+            log("OTA: Error descarregant {}: {}".format(nom, resultat))
+            desconnectar_mqtt()
             return
 
-    client.disconnect()
+    desconnectar_mqtt()
 
     ota.set_update_flag()
 
@@ -235,5 +213,12 @@ def actualitzar_programa():
 
 
 def desconnectar_mqtt():
-    client.disconnect()
-    debug("MQTT desconnectat")
+    global client
+    # if client:
+    #     try:
+    #         utime.sleep(1)
+    #         client.disconnect()
+    #     except:
+    #         pass
+
+    client = None
