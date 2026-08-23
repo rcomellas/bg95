@@ -18,6 +18,8 @@ tracking_max = config.TRACKING_MAX_DEFECTE
 tracking_inici = None
 
 
+# gnss
+
 def obtenir_posicio():
     debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
     inici = utime.time()
@@ -93,9 +95,10 @@ def convertir_coordenada(valor, hemisferi, graus):
     return round(decimal, 6)
 
 
+# utils
+
 def temps_transcorregut(inici):
     return utime.ticks_diff(utime.time(), inici)
-
 
 def debug(*args):
     if config.DEBUG:
@@ -109,6 +112,9 @@ def obtenir_senyal():
         return int(d[2]),int(d[4])
     except:
         return None,None
+
+
+# psm
 
 def tau_a_demanar():
     hora_futura = (utime.localtime()[3] + config.TAU_LLARG // 3600) % 24
@@ -135,24 +141,6 @@ def obtenir_psm_negociat():
 
     except Exception:
         return None, None
-
-
-def publicar_posicio(client, posicio):
-    if not posicio:
-        return
-
-    latitud, longitud, satel_lits = posicio
-
-    client.publish(
-        config.TOPIC_POSICIO,
-        ujson.dumps({
-            "id": config.DEVICE_ID,
-            "latitude": latitud,
-            "longitude": longitud,
-            "sat": satel_lits
-        }),
-        True
-    )
 
 
 def connectar_mqtt():
@@ -184,6 +172,24 @@ def connectar_mqtt():
     mqtt_time = temps_transcorregut(inici)
 
     return client, mqtt_time
+
+
+def publicar_posicio(client, posicio):
+    if not posicio:
+        return
+
+    latitud, longitud, satel_lits = posicio
+
+    client.publish(
+        config.TOPIC_POSICIO,
+        ujson.dumps({
+            "id": config.DEVICE_ID,
+            "latitude": latitud,
+            "longitude": longitud,
+            "sat": satel_lits
+        }),
+        True
+    )
 
 
 def escoltar_mqtt(client):
@@ -283,6 +289,8 @@ def main():
     net_time = temps_transcorregut(inici)
 
     wdt.feed()
+    debug("Versió:", config.VERSIO)
+
 
     if stage != 3 or state != 1:
         pm.autosleep(1)
