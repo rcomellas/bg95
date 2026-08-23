@@ -103,27 +103,12 @@ def debug(*args):
 
 
 def obtenir_senyal():
-    resposta = bytearray(100)
-
-    ret = atcmd.sendSync(
-        "AT+QCSQ\r\n",
-        resposta,
-        "",
-        2
-    )
-
-    if ret != 0:
-        return None, None
-
-    text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "")
-
     try:
-        dades = text.split(":")[1].strip().split(",")
-        return int(dades[2]), int(dades[4])
-
-    except Exception:
-        return None, None
-
+        r=bytearray(100); atcmd.sendSync("AT+QCSQ\r\n",r,"",2)
+        d=bytes(r).decode().split(":")[1].split(",")
+        return int(d[2]),int(d[4])
+    except:
+        return None,None
 
 def tau_a_demanar():
     hora_futura = (utime.localtime()[3] + config.TAU_LLARG // 3600) % 24
@@ -286,7 +271,7 @@ def main():
     global tracking_inici
     global fitxers_ota_pendents
 
-    pm.autosleep(0)
+    # pm.autosleep(0)
 
     if pm.get_psm_time()[0]:
         pm.set_psm_time(0)
@@ -349,6 +334,7 @@ def main():
     except Exception as error:
         debug("Error publicant posició:", error)
 
+    # pm.autosleep(1)
     utime.sleep(1)
 
     while tracking_actiu:
@@ -425,12 +411,14 @@ def main():
 
     tau_net, active_time = obtenir_psm_negociat()
     rsrp, rsrq = obtenir_senyal()
+    proper = "%02d:%02d:%02d" % utime.localtime(utime.mktime(utime.localtime()) + tau_net)[3:6]
 
     status = {
         "version": config.VERSIO,
         "bat": Power.getVbatt(),
         "tau_req": tau_demanat,
         "tau_net": tau_net,
+        "proper": proper,
         "active_time": active_time,
         "net_time": net_time,
         "gnss_time": gnss_time,
