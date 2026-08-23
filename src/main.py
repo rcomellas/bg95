@@ -1,56 +1,27 @@
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
+import ntptime
 from misc import Power
 from umqtt import MQTTClient
 from machine import WDT
-from usr import secrets
+from usr import secrets, config
 
-import ntptime
 ntptime.settime(2)
-
-VERSIO = "1.0.4"
-DEBUG = True
-
-TAU_CURT = 180
-TAU_LLARG = 180
-HORA_INICI_NIT = 0
-HORA_FINAL_NIT = 7
-ACTIVE_TIME = 6
-
-TRACKING_INTERVAL_DEFECTE = 30
-TRACKING_INTERVAL_MAX = 120
-TRACKING_MAX_DEFECTE = 600
-
-TOPIC_ORDRES = b"bg95/command"
-BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
-
-MQTT_HOST = "mqtt.flespi.io"
-MQTT_PORT = 1883
-
-TOPIC_POSICIO = b"bg95/location"
-TOPIC_STATUS = b"bg95/status"
-# TOPIC_DISCOVERY = "homeassistant/device_tracker/bg95/config"
-
-DEVICE_ID = "BG95"
-# INTERVAL_SEGONS = 60
-TEMPS_MAXIM_FIX = 10
-
 _thread.stack_size(16 * 1024)
-
-wdt = WDT(180)
+wdt = WDT(config.TEMPS_WATCHDOG)
 
 fitxers_ota_pendents = None
 ordre_rebuda = False
 
 tracking_actiu = False
-tracking_interval = TRACKING_INTERVAL_DEFECTE
-tracking_max = TRACKING_MAX_DEFECTE
+tracking_interval = config.TRACKING_INTERVAL_DEFECTE
+tracking_max = config.TRACKING_MAX_DEFECTE
 tracking_inici = None
 
 
 def obtenir_posicio():
-    debug("TEMPS_MAXIM_FIX:", TEMPS_MAXIM_FIX)
+    debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
     inici = utime.time()
-    while temps_transcorregut(inici) < TEMPS_MAXIM_FIX :
+    while temps_transcorregut(inici) < config.TEMPS_MAXIM_FIX :
         resultat = quecgnss.read(4096)
 
         if resultat != -1 and resultat[0] > 0:
@@ -82,7 +53,7 @@ def obtenir_posicio():
 
                 return latitud, longitud, satel_lits
 
-            if DEBUG:
+            if config.DEBUG:
                 print("Sense fix:", temps_transcorregut(inici), "s", end=" ")
 
                 cn0 = []
@@ -127,7 +98,7 @@ def temps_transcorregut(inici):
 
 
 def debug(*args):
-    if DEBUG:
+    if config.DEBUG:
         print(*args)
 
 
@@ -155,12 +126,12 @@ def obtenir_senyal():
 
 
 def tau_a_demanar():
-    hora_futura = (utime.localtime()[3] + TAU_LLARG // 3600) % 24
+    hora_futura = (utime.localtime()[3] + config.TAU_LLARG // 3600) % 24
 
     return (
-        TAU_LLARG
-        if HORA_INICI_NIT <= hora_futura < HORA_FINAL_NIT
-        else TAU_CURT
+        config.TAU_LLARG
+        if config.HORA_INICI_NIT <= hora_futura < config.HORA_FINAL_NIT
+        else config.TAU_CURT
     )
 
 
@@ -188,9 +159,9 @@ def publicar_posicio(client, posicio):
     latitud, longitud, satel_lits = posicio
 
     client.publish(
-        TOPIC_POSICIO,
+        config.TOPIC_POSICIO,
         ujson.dumps({
-            "id": DEVICE_ID,
+            "id": config.DEVICE_ID,
             "latitude": latitud,
             "longitude": longitud,
             "sat": satel_lits
@@ -203,9 +174,9 @@ def connectar_mqtt():
     inici = utime.time()
 
     client = MQTTClient(
-        DEVICE_ID,
-        MQTT_HOST,
-        port=MQTT_PORT,
+        config.DEVICE_ID,
+        config.MQTT_HOST,
+        port=config.MQTT_PORT,
         user=secrets.TOKEN_FLESPI_MQTT,
         password=secrets.TOKEN_FLESPI_MQTT,
         reconn=False
@@ -218,7 +189,7 @@ def connectar_mqtt():
 
     client.connect()
 
-    client.subscribe(TOPIC_ORDRES, 0)
+    client.subscribe(config.TOPIC_ORDRES, 0)
 
     _thread.start_new_thread(
         escoltar_mqtt,
@@ -238,7 +209,7 @@ def escoltar_mqtt(client):
             client.wait_msg()
 
             if ordre_rebuda:
-                client.publish(TOPIC_ORDRES, b"", True)
+                client.publish(config.TOPIC_ORDRES, b"", True)
                 ordre_rebuda = False
 
         except Exception as error:
@@ -270,13 +241,13 @@ def processar_ordre(topic, missatge):
         elif cmd == "track_start":
             tracking_interval = min(
                 ordre.get("interval",
-                          TRACKING_INTERVAL_DEFECTE),
-                TRACKING_INTERVAL_MAX
+                          config.TRACKING_INTERVAL_DEFECTE),
+                config.TRACKING_INTERVAL_MAX
             )
 
             tracking_max = ordre.get(
                 "max",
-                TRACKING_MAX_DEFECTE
+                config.TRACKING_MAX_DEFECTE
             )
 
             tracking_inici = utime.time()
@@ -296,7 +267,7 @@ def executar_ota(fitxers, client):
 
     for nom in fitxers:
         resultat = ota.download(
-            BASE_URL_OTA + nom,
+            config.BASE_URL_OTA + nom,
             "/usr/" + nom
         )
 
@@ -333,7 +304,7 @@ def main():
         utime.sleep(120)
         return
 
-    if DEBUG:
+    if config.DEBUG:
         resposta = bytearray(100)
         atcmd.sendSync('AT+QGPSCFG="xtra_info"\r\n', resposta, "", 5)
         text = bytes(resposta).decode(
@@ -447,7 +418,7 @@ def main():
         unitat_tau,
         valor_tau,
         0,
-        ACTIVE_TIME // 2
+        config.ACTIVE_TIME // 2
     )
 
     utime.sleep(2)
@@ -456,7 +427,7 @@ def main():
     rsrp, rsrq = obtenir_senyal()
 
     status = {
-        "version": VERSIO,
+        "version": config.VERSIO,
         "bat": Power.getVbatt(),
         "tau_req": tau_demanat,
         "tau_net": tau_net,
@@ -471,7 +442,7 @@ def main():
 
     try:
         client.publish(
-            TOPIC_STATUS,
+            config.TOPIC_STATUS,
             ujson.dumps(status),
             True
         )
