@@ -1,31 +1,17 @@
-# region imports
-
-import time
-import ujson
-import quecgnss
-import pm
-import checkNet
-import _thread
-import atcmd
+import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 from misc import Power
 from umqtt import MQTTClient
-import app_fota
 from machine import WDT
-
-from usr import xtra
-from usr import config
 from usr import secrets
 
-# endregion imports
-
-
-# region Constants
+import ntptime
+ntptime.settime(2)
 
 VERSIO = "1.0.4"
 DEBUG = True
 
-TAU_CURT = 1800
-TAU_LLARG = 10800
+TAU_CURT = 180
+TAU_LLARG = 180
 HORA_INICI_NIT = 0
 HORA_FINAL_NIT = 7
 ACTIVE_TIME = 6
@@ -37,9 +23,18 @@ TRACKING_MAX_DEFECTE = 600
 TOPIC_ORDRES = b"bg95/command"
 BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
 
-_thread.stack_size(16 * 1024)
+MQTT_HOST = "mqtt.flespi.io"
+MQTT_PORT = 1883
 
-# endregion
+TOPIC_POSICIO = b"bg95/location"
+TOPIC_STATUS = b"bg95/status"
+# TOPIC_DISCOVERY = "homeassistant/device_tracker/bg95/config"
+
+DEVICE_ID = "BG95"
+# INTERVAL_SEGONS = 60
+TEMPS_MAXIM_FIX = 10
+
+_thread.stack_size(16 * 1024)
 
 wdt = WDT(180)
 
@@ -53,11 +48,9 @@ tracking_inici = None
 
 
 def obtenir_posicio():
-    debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
-
-    inici = time.ticks_ms()
-
-    while time.ticks_diff(time.ticks_ms(), inici) < config.TEMPS_MAXIM_FIX * 1000:
+    debug("TEMPS_MAXIM_FIX:", TEMPS_MAXIM_FIX)
+    inici = utime.time()
+    while temps_transcorregut(inici) < TEMPS_MAXIM_FIX :
         resultat = quecgnss.read(4096)
 
         if resultat != -1 and resultat[0] > 0:
@@ -90,11 +83,7 @@ def obtenir_posicio():
                 return latitud, longitud, satel_lits
 
             if DEBUG:
-                print(
-                    "Sense fix GNSS:",
-                    time.ticks_diff(time.ticks_ms(), inici) // 1000,
-                    "segons", end=" "
-                )
+                print("Sense fix:", temps_transcorregut(inici), "s", end=" ")
 
                 cn0 = []
 
@@ -119,7 +108,7 @@ def obtenir_posicio():
                 else:
                     print("Sat: 0 C/N0 mitjà: 0")
 
-        time.sleep(2)
+        utime.sleep(2)
 
     return None
 
@@ -134,7 +123,7 @@ def convertir_coordenada(valor, hemisferi, graus):
 
 
 def temps_transcorregut(inici):
-    return time.ticks_diff(time.ticks_ms(), inici) // 1000
+    return utime.ticks_diff(utime.time(), inici)
 
 
 def debug(*args):
@@ -166,7 +155,7 @@ def obtenir_senyal():
 
 
 def tau_a_demanar():
-    hora_futura = (time.localtime()[3] + TAU_LLARG // 3600) % 24
+    hora_futura = (utime.localtime()[3] + TAU_LLARG // 3600) % 24
 
     return (
         TAU_LLARG
@@ -177,13 +166,7 @@ def tau_a_demanar():
 
 def obtenir_psm_negociat():
     resposta = bytearray(100)
-
-    ret = atcmd.sendSync(
-        "AT+QPSMS?\r\n",
-        resposta,
-        "",
-        2
-    )
+    ret = atcmd.sendSync("AT+QPSMS?\r\n", resposta, "", 2)
 
     if ret != 0:
         return None, None
@@ -205,9 +188,9 @@ def publicar_posicio(client, posicio):
     latitud, longitud, satel_lits = posicio
 
     client.publish(
-        config.TOPIC_POSICIO,
+        TOPIC_POSICIO,
         ujson.dumps({
-            "id": config.DEVICE_ID,
+            "id": DEVICE_ID,
             "latitude": latitud,
             "longitude": longitud,
             "sat": satel_lits
@@ -217,22 +200,21 @@ def publicar_posicio(client, posicio):
 
 
 def connectar_mqtt():
-    inici = time.ticks_ms()
+    inici = utime.time()
 
     client = MQTTClient(
-        config.DEVICE_ID,
-        config.MQTT_HOST,
-        port=config.MQTT_PORT,
+        DEVICE_ID,
+        MQTT_HOST,
+        port=MQTT_PORT,
         user=secrets.TOKEN_FLESPI_MQTT,
         password=secrets.TOKEN_FLESPI_MQTT,
         reconn=False
-
     )
 
     client.set_callback(processar_ordre)
 
     quecgnss.setPriority(1)
-    time.sleep(1)
+    utime.sleep(1)
 
     client.connect()
 
@@ -297,7 +279,7 @@ def processar_ordre(topic, missatge):
                 TRACKING_MAX_DEFECTE
             )
 
-            tracking_inici = time.ticks_ms()
+            tracking_inici = utime.time()
             tracking_actiu = True
             ordre_rebuda = True
 
@@ -338,7 +320,7 @@ def main():
     if pm.get_psm_time()[0]:
         pm.set_psm_time(0)
 
-    inici = time.ticks_ms()
+    inici = utime.time()
 
     stage, state = checkNet.waitNetworkReady(30)
 
@@ -348,7 +330,7 @@ def main():
 
     if stage != 3 or state != 1:
         pm.autosleep(1)
-        time.sleep(120)
+        utime.sleep(120)
         return
 
     if DEBUG:
@@ -366,19 +348,10 @@ def main():
         gnss_time = 0
 
     else:
-        # try:
-        #     resultat_xtra = xtra.actualitzar_si_cal()
-        #     debug("Actualització XTRA:", resultat_xtra)
-        # except Exception:
-        #     pass
         quecgnss.gnssEnable(1)
-
-        inici = time.ticks_ms()
-
+        inici = utime.time()
         posicio = obtenir_posicio()
-
         gnss_time = temps_transcorregut(inici)
-
         wdt.feed()
 
         debug(
@@ -388,10 +361,6 @@ def main():
             posicio
         )
 
-        # debug("Abans apagar GNSS")
-        # # quecgnss.gnssEnable(0)
-        # debug("GNSS apagat")
-
     try:
         client, mqtt_time = connectar_mqtt()
 
@@ -399,7 +368,7 @@ def main():
         debug("Error connectant MQTT:", error)
 
         pm.autosleep(1)
-        time.sleep(120)
+        utime.sleep(120)
         return
 
     try:
@@ -409,15 +378,11 @@ def main():
     except Exception as error:
         debug("Error publicant posició:", error)
 
-    time.sleep(1)
+    utime.sleep(1)
 
     while tracking_actiu:
-        debug("Tracking actiu. Interval:",
-              tracking_interval)
-        if time.ticks_diff(
-            time.ticks_ms(),
-            tracking_inici
-        ) >= tracking_max * 1000:
+        debug("Tracking actiu. Interval:", tracking_interval)
+        if temps_transcorregut(tracking_inici) >= tracking_max :
             debug("Final tracking: temps màxim")
             tracking_actiu = False
             break
@@ -429,58 +394,33 @@ def main():
             )
             return
 
-        debug(
-            "Tracking: espero",
-            tracking_interval,
-            "segons"
-        )
+        debug("Tracking: espero", tracking_interval, "segons")
 
-        time.sleep(tracking_interval)
+        utime.sleep(tracking_interval)
 
         if not tracking_actiu:
             debug("Final tracking: track_stop")
             break
 
-        if time.ticks_diff(
-            time.ticks_ms(),
-            tracking_inici
-        ) >= tracking_max * 1000:
+        if temps_transcorregut(tracking_inici) >= tracking_max:
             debug("Final tracking: temps màxim")
             tracking_actiu = False
             break
 
         quecgnss.gnssEnable(1)
-
-        inici = time.ticks_ms()
-
+        inici = utime.time()
         posicio = obtenir_posicio()
-
         gnss_tracking_time = temps_transcorregut(inici)
-
         # quecgnss.gnssEnable(0)
-
         wdt.feed()
 
         if posicio:
             try:
-                publicar_posicio(
-                    client,
-                    posicio
-                )
-
-                debug(
-                    "Tracking posició:",
-                    posicio,
-                    "GNSS:",
-                    gnss_tracking_time,
-                    "s"
-                )
+                publicar_posicio(client, posicio)
+                debug("Tracking posició:", posicio, "GNSS:", gnss_tracking_time, "s")
 
             except Exception as error:
-                debug(
-                    "Error MQTT tracking:",
-                    error
-                )
+                debug("Error MQTT tracking:", error)
 
         else:
             debug("Tracking sense fix")
@@ -510,7 +450,7 @@ def main():
         ACTIVE_TIME // 2
     )
 
-    time.sleep(2)
+    utime.sleep(2)
 
     tau_net, active_time = obtenir_psm_negociat()
     rsrp, rsrq = obtenir_senyal()
@@ -531,21 +471,16 @@ def main():
 
     try:
         client.publish(
-            config.TOPIC_STATUS,
+            TOPIC_STATUS,
             ujson.dumps(status),
             True
         )
 
-        debug(
-            "Publicat status:",
-            status
-        )
+        debug("Publicat status:", status)
+        utime.sleep(2)
 
     except Exception as error:
-        debug(
-            "Error publicant status:",
-            error
-        )
+        debug("Error publicant status:", error)
 
     wdt.feed()
 
@@ -553,7 +488,7 @@ def main():
 
     pm.autosleep(1)
 
-    time.sleep(120)
+    utime.sleep(120)
 
 
 main()
