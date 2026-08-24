@@ -368,7 +368,7 @@ def main():
         debug("Error publicant posició:", error)
 
     # pm.autosleep(1)
-    utime.sleep(1)
+    # utime.sleep(1)
 
     while tracking_actiu:
         with lock_tracking:
@@ -455,17 +455,16 @@ def main():
         config.ACTIVE_TIME // 2
     )
 
-    utime.sleep(2)
-
-    tau_net, active_time = obtenir_psm_negociat()
-
-    if tau_net is not None:
-        proper = "%02d:%02d:%02d" % utime.localtime(
-            utime.mktime(utime.localtime()) + tau_net
-        )[3:6]
-    else:
-        proper = None
-
+    proper = None
+    for _ in range(4):
+        utime.sleep(0.5)
+        tau_net, active_time = obtenir_psm_negociat()
+        if tau_net is not None:
+            proper = "%02d:%02d:%02d" % utime.localtime(
+                utime.mktime(utime.localtime()) + tau_net
+            )[3:6]
+            break
+        
     status = {
         "version": config.VERSIO,
         "bat": Power.getVbatt(),
