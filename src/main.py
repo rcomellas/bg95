@@ -15,7 +15,7 @@ tracking_actiu = False
 tracking_interval = config.TRACKING_INTERVAL_DEFECTE
 tracking_max = config.TRACKING_MAX_DEFECTE
 tracking_inici = None
-
+lock_tracking = _thread.allocate_lock()
 
 # gnss
 
@@ -88,13 +88,15 @@ def obtenir_posicio():
 
 
 def convertir_coordenada(valor, hemisferi, graus):
-    decimal = float(valor[:graus]) + float(valor[graus:]) / 60
+    try:
+        decimal = float(valor[:graus]) + float(valor[graus:]) / 60
+    except (ValueError, IndexError):
+        return None
 
-    if hemisferi == "S" or hemisferi == "W":
+    if hemisferi in ("S", "W"):
         decimal = -decimal
 
     return round(decimal, 6)
-
 
 # utils
 def temps_transcorregut(inici):
@@ -196,9 +198,13 @@ def publicar_posicio(client, posicio):
 def escoltar_mqtt(client):
     global ordre_rebuda
 
+    errors_consecutius = 0
+    max_errors = 3
+
     while True:
         try:
             client.wait_msg()
+            errors_consecutius = 0
 
             if ordre_rebuda:
                 client.publish(config.TOPIC_ORDRES, b"", True)
@@ -208,9 +214,14 @@ def escoltar_mqtt(client):
                     break
 
         except Exception as error:
-            debug("escoltar_mqtt aturat:", error)
-            break
+            errors_consecutius += 1
+            debug("escoltar_mqtt error:", error, "(", errors_consecutius, "/", max_errors, ")")
 
+            if errors_consecutius >= max_errors:
+                debug("escoltar_mqtt aturat definitivament")
+                break
+
+            utime.sleep(1)
 
 def processar_ordre(topic, missatge):
     global fitxers_ota_pendents
@@ -234,25 +245,31 @@ def processar_ordre(topic, missatge):
             ordre_rebuda = True
 
         elif cmd == "track_start":
-            tracking_interval = min(
-                ordre.get("interval",
-                          config.TRACKING_INTERVAL_DEFECTE),
-                config.TRACKING_INTERVAL_MAX
-            )
+            try:
+                interval = int(ordre.get("interval", config.TRACKING_INTERVAL_DEFECTE))
+            except (TypeError, ValueError):
+                interval = config.TRACKING_INTERVAL_DEFECTE
 
-            tracking_max = ordre.get(
-                "max",
-                config.TRACKING_MAX_DEFECTE
-            )
+            nou_interval = max(config.TRACKING_INTERVAL_MIN, min(interval, config.TRACKING_INTERVAL_MAX))
 
-            tracking_inici = utime.time()
-            tracking_actiu = True
+            try:
+                nou_max = int(ordre.get("max", config.TRACKING_MAX_DEFECTE))
+            except (TypeError, ValueError):
+                nou_max = config.TRACKING_MAX_DEFECTE
+            nou_max = max(0, nou_max)
+
+            with lock_tracking:
+                tracking_interval = nou_interval
+                tracking_max = nou_max
+                tracking_inici = utime.time()
+                tracking_actiu = True
+
             ordre_rebuda = True
 
         elif cmd == "track_stop":
-            tracking_actiu = False
+            with lock_tracking:
+                tracking_actiu = False
             ordre_rebuda = True
-
     except Exception as error:
         debug("Error processant ordre MQTT:", error)
 
@@ -289,18 +306,22 @@ def main():
     inici = utime.time()
 
     stage, state = checkNet.waitNetworkReady(30)
-    ntptime.settime(2)
     net_time = temps_transcorregut(inici)
 
     wdt.feed()
     debug("Versió:", config.VERSIO)
-
 
     if stage != 3 or state != 1:
         pm.autosleep(1)
         utime.sleep(120)
         return
 
+    try:
+        ntptime.settime(2)
+    except Exception as error:
+        debug("Error NTP:", error)
+
+    
     if config.DEBUG:
         resposta = bytearray(100)
         atcmd.sendSync('AT+QGPSCFG="xtra_info"\r\n', resposta, "", 5)
@@ -350,10 +371,16 @@ def main():
     utime.sleep(1)
 
     while tracking_actiu:
-        debug("Tracking actiu. Interval:", tracking_interval)
-        if temps_transcorregut(tracking_inici) >= tracking_max :
+        with lock_tracking:
+            interval_actual = tracking_interval
+            max_actual = tracking_max
+            inici_actual = tracking_inici
+
+        debug("Tracking actiu. Interval:", interval_actual)
+        if temps_transcorregut(inici_actual) >= max_actual:
             debug("Final tracking: temps màxim")
-            tracking_actiu = False
+            with lock_tracking:
+                tracking_actiu = False
             break
 
         if fitxers_ota_pendents:
@@ -363,17 +390,25 @@ def main():
             )
             return
 
-        debug("Tracking: espero", tracking_interval, "segons")
+        debug("Tracking: espero", interval_actual, "segons")
 
-        utime.sleep(tracking_interval)
+        utime.sleep(interval_actual)
 
-        if not tracking_actiu:
+        with lock_tracking:
+            actiu_actual = tracking_actiu
+
+        if not actiu_actual:
             debug("Final tracking: track_stop")
             break
 
-        if temps_transcorregut(tracking_inici) >= tracking_max:
+        with lock_tracking:
+            max_actual = tracking_max
+            inici_actual = tracking_inici
+
+        if temps_transcorregut(inici_actual) >= max_actual:
             debug("Final tracking: temps màxim")
-            tracking_actiu = False
+            with lock_tracking:
+                tracking_actiu = False
             break
 
         quecgnss.gnssEnable(1)
@@ -423,7 +458,6 @@ def main():
     utime.sleep(2)
 
     tau_net, active_time = obtenir_psm_negociat()
-    tau_net, active_time = obtenir_psm_negociat()
 
     if tau_net is not None:
         proper = "%02d:%02d:%02d" % utime.localtime(
@@ -470,4 +504,9 @@ def main():
     utime.sleep(120)
 
 
-main()
+try:
+    main()
+except Exception as error:
+    debug("Error fatal a main:", error)
+    pm.autosleep(1)
+    utime.sleep(120)
