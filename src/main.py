@@ -258,36 +258,21 @@ def processar_ordre(topic, missatge):
 
 
 def executar_ota(fitxers, client):
-    debug("ENTRO OTA:", fitxers)
-
     ota = app_fota.new()
 
     for nom in fitxers:
         url = config.BASE_URL_OTA + nom
-        debug("OTA URL:", url)
 
         resultat = ota.download(
             url,
             "/usr/" + nom
         )
 
-        debug("OTA DOWNLOAD RESULT:", resultat)
-
         if resultat != 0:
-            debug("OTA DOWNLOAD ERROR")
             client.disconnect()
             return
 
-    debug("OTA DOWNLOADS OK")
-
-    # client.disconnect()
-    debug ("despres disconn")
-    print(open("/usr/.updater/config.py").read())
-    resultat = ota.set_update_flag()
-    debug("OTA SET FLAG:", resultat)
-
-    utime.sleep(2)
-    debug("OTA RESTART")
+    ota.set_update_flag()
     Power.powerRestart()
 
 def main():
