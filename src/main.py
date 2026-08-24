@@ -96,10 +96,9 @@ def convertir_coordenada(valor, hemisferi, graus):
 
 
 # utils
-
 def temps_transcorregut(inici):
-    return utime.ticks_diff(utime.time(), inici)
-
+    return utime.time() - inici
+    
 def debug(*args):
     if config.DEBUG:
         print(*args)
