@@ -116,14 +116,15 @@ def obtenir_senyal():
 
 # psm
 
-def tau_a_demanar():
-    hora_futura = (utime.localtime()[3] + config.TAU_LLARG // 3600) % 24
+def calcular_tau_a_demanar():
+    hora = utime.localtime()[3]
 
-    return (
-        config.TAU_LLARG
-        if config.HORA_INICI_NIT <= hora_futura < config.HORA_FINAL_NIT
-        else config.TAU_CURT
-    )
+    if config.HORA_INICI_TAU_LLARG <= config.HORA_FINAL_TAU_LLARG:
+        dins_interval = config.HORA_INICI_TAU_LLARG <= hora <= config.HORA_FINAL_TAU_LLARG
+    else:
+        dins_interval = hora >= config.HORA_INICI_TAU_LLARG or hora <= config.HORA_FINAL_TAU_LLARG
+
+    return config.TAU_LLARG if dins_interval else config.TAU_CURT
 
 
 def obtenir_psm_negociat():
@@ -400,7 +401,8 @@ def main():
         )
         return
 
-    tau_demanat = tau_a_demanar()
+    rsrp, rsrq = obtenir_senyal()
+    tau_demanat = calcular_tau_a_demanar()
 
     unitat_tau, valor_tau = (
         (5, tau_demanat // 60)
@@ -418,7 +420,6 @@ def main():
     utime.sleep(2)
 
     tau_net, active_time = obtenir_psm_negociat()
-    rsrp, rsrq = obtenir_senyal()
     proper = "%02d:%02d:%02d" % utime.localtime(utime.mktime(utime.localtime()) + tau_net)[3:6]
 
     status = {
@@ -453,6 +454,7 @@ def main():
 
     client.disconnect()
 
+    debug("A dormir")
     pm.autosleep(1)
 
     utime.sleep(120)

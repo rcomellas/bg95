@@ -19,14 +19,14 @@ TOPIC_ORDRES = b"bg95/command"
 # TOPIC_DISCOVERY = b"homeassistant/device_tracker/bg95/config"
 
 # GNSS
-TEMPS_MAXIM_FIX = 15  # segons
+TEMPS_MAXIM_FIX = 60  # segons
 
 # PSM
 TAU_CURT = 180  # en segons
 TAU_LLARG = 180  # en segons
-ACTIVE_TIME = 0  # en segons
-HORA_INICI_NIT = 0
-HORA_FINAL_NIT = 7
+ACTIVE_TIME = 10  # en segons
+HORA_INICI_TAU_LLARG = 0
+HORA_FINAL_TAU_LLARG = 7
 
 # Tracking
 TRACKING_INTERVAL_DEFECTE = 30  # en segons
