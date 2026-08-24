@@ -5,7 +5,6 @@ from umqtt import MQTTClient
 from machine import WDT
 from usr import secrets, config
 
-ntptime.settime(2)
 _thread.stack_size(16 * 1024)
 wdt = WDT(config.TEMPS_WATCHDOG)
 
@@ -24,6 +23,8 @@ def obtenir_posicio():
     debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
     inici = utime.time()
     while temps_transcorregut(inici) < config.TEMPS_MAXIM_FIX :
+        wdt.feed()
+
         resultat = quecgnss.read(4096)
 
         if resultat != -1 and resultat[0] > 0:
@@ -261,6 +262,7 @@ def executar_ota(fitxers, client):
 
     for nom in fitxers:
         url = config.BASE_URL_OTA + nom
+        wdt.feed()
 
         resultat = ota.download(
             url,
@@ -287,7 +289,7 @@ def main():
     inici = utime.time()
 
     stage, state = checkNet.waitNetworkReady(30)
-
+    ntptime.settime(2)
     net_time = temps_transcorregut(inici)
 
     wdt.feed()
@@ -421,7 +423,14 @@ def main():
     utime.sleep(2)
 
     tau_net, active_time = obtenir_psm_negociat()
-    proper = "%02d:%02d:%02d" % utime.localtime(utime.mktime(utime.localtime()) + tau_net)[3:6]
+    tau_net, active_time = obtenir_psm_negociat()
+
+    if tau_net is not None:
+        proper = "%02d:%02d:%02d" % utime.localtime(
+            utime.mktime(utime.localtime()) + tau_net
+        )[3:6]
+    else:
+        proper = None
 
     status = {
         "version": config.VERSIO,
