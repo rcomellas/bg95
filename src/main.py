@@ -6,6 +6,7 @@ from machine import WDT
 from usr import secrets, config
 
 _thread.stack_size(16 * 1024)
+mqtt_escolta_activa = False
 wdt = WDT(config.TEMPS_WATCHDOG)
 
 fitxers_ota_pendents = None
@@ -147,6 +148,8 @@ def obtenir_psm_negociat():
 
 
 def connectar_mqtt():
+    global mqtt_escolta_activa
+
     inici = utime.time()
 
     client = MQTTClient(
@@ -166,6 +169,8 @@ def connectar_mqtt():
     client.connect()
 
     client.subscribe(config.TOPIC_ORDRES, 0)
+
+    mqtt_escolta_activa = True
 
     _thread.start_new_thread(
         escoltar_mqtt,
@@ -197,11 +202,12 @@ def publicar_posicio(client, posicio):
 
 def escoltar_mqtt(client):
     global ordre_rebuda
+    global mqtt_escolta_activa
 
     errors_consecutius = 0
     max_errors = 3
-
-    while True:
+    
+    while mqtt_escolta_activa:
         try:
             client.wait_msg()
             errors_consecutius = 0
@@ -212,17 +218,21 @@ def escoltar_mqtt(client):
 
                 if fitxers_ota_pendents:
                     break
-
         except Exception as error:
+            if not mqtt_escolta_activa:
+                break
+
             errors_consecutius += 1
             debug("escoltar_mqtt error:", error, "(", errors_consecutius, "/", max_errors, ")")
 
             if errors_consecutius >= max_errors:
                 debug("escoltar_mqtt aturat definitivament")
+                mqtt_escolta_activa = False
                 break
 
             utime.sleep(1)
-
+    debug("mqtt_escolta_activa:", mqtt_escolta_activa)
+    
 def processar_ordre(topic, missatge):
     global fitxers_ota_pendents
     global tracking_actiu
@@ -297,6 +307,7 @@ def main():
     global tracking_actiu
     global tracking_inici
     global fitxers_ota_pendents
+    global mqtt_escolta_activa
 
     # pm.autosleep(0)
 
@@ -349,6 +360,7 @@ def main():
             "segons:",
             posicio
         )
+    quecgnss.gnssEnable(0)
 
     try:
         client, mqtt_time = connectar_mqtt()
@@ -494,7 +506,7 @@ def main():
         debug("Error publicant status:", error)
 
     wdt.feed()
-
+    mqtt_escolta_activa = False
     client.disconnect()
 
     debug("A dormir")
