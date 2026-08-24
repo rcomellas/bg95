@@ -282,6 +282,7 @@ def executar_ota(fitxers, client):
 
     # client.disconnect()
     debug ("despres disconn")
+    print(open("/usr/.updater/config.py").read())
     resultat = ota.set_update_flag()
     debug("OTA SET FLAG:", resultat)
 
