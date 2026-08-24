@@ -204,9 +204,6 @@ def escoltar_mqtt(client):
                 client.publish(config.TOPIC_ORDRES, b"", True)
                 ordre_rebuda = False
 
-                if fitxers_ota_pendents:
-                    break
-
         except Exception as error:
             debug("escoltar_mqtt aturat:", error)
             break
