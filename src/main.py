@@ -352,19 +352,28 @@ def processar_ordre(topic, missatge):
 # ota
 # ---------------------------------------------------------------------------
 
-def verificar_hash(path, hash_esperat):
-    try:
-        h = uhashlib.sha256()
-        with open(path, "rb") as f:
-            while True:
-                bloc = f.read(512)
-                if not bloc:
-                    break
-                h.update(bloc)
-        return ubinascii.hexlify(h.digest()).decode() == hash_esperat
-    except Exception as error:
-        debug("Error verificant hash:", error)
-        return False
+def verificar_hash(path, hash_esperat, intents=5):
+    for intent in range(intents):
+        try:
+            h = uhashlib.sha256()
+            with open(path, "rb") as f:
+                while True:
+                    bloc = f.read(512)
+                    if not bloc:
+                        break
+                    h.update(bloc)
+            return ubinascii.hexlify(h.digest()).decode() == hash_esperat
+
+        except OSError as error:
+            debug("Fitxer encara no llegible (intent", intent + 1, "/", intents, "):", error)
+            utime.sleep(0.5)
+
+        except Exception as error:
+            debug("Error verificant hash:", error)
+            return False
+
+    debug("No s'ha pogut llegir el fitxer després de", intents, "intents")
+    return False
 
 
 def executar_ota(fitxers, hashes, client):
@@ -382,8 +391,6 @@ def executar_ota(fitxers, hashes, client):
             debug("Error descarregant:", nom)
             client.disconnect()
             return
-
-        utime.sleep(0.5)  # marge perquè l'escriptura es completi al filesystem
 
         hash_esperat = hashes.get(nom) if hashes else None
 
