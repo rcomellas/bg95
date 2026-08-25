@@ -1,7 +1,7 @@
 """ Configuració del tracker """
 
 DEVICE_ID = "BG95"
-VERSIO = "1.0.13"
+VERSIO = "1.0.14"
 
 DEBUG = True
 
@@ -34,7 +34,7 @@ TRACKING_INTERVAL_MAX = 120  # en segons
 TRACKING_MAX_DEFECTE = 600  # en segons
 
 # OTA
-BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/ota/"
+BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/"
 
 # LOG ERRORS
 FITXER_LOG = "/usr/bg95.error.log"
