@@ -1,5 +1,5 @@
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
-import ntptime
+import ntptime, uos
 import ubinascii, uhashlib
 from misc import Power
 from umqtt import MQTTClient
@@ -212,7 +212,6 @@ def connectar_mqtt(intents=3):
         except Exception as error:
             ultim_error = error
             debug("Error connectant MQTT (intent", intent, "/", intents, "):", error)
-
             if intent < intents:
                 utime.sleep(min(2 ** intent, 10))
                 wdt.feed()
@@ -229,6 +228,7 @@ def desconnectar_mqtt(client):
         client.disconnect()
     except Exception as error:
         debug("Error desconnectant MQTT:", error)
+        guardar_error("MQTT error:", error)
 
 
 def escoltar_mqtt(client):
@@ -256,9 +256,10 @@ def escoltar_mqtt(client):
 
             errors_consecutius += 1
             debug("escoltar_mqtt error:", error, "(", errors_consecutius, "/", max_errors, ")")
-
+            guardar_error("MQTT escoltar:", error, "errors consecutius")
             if errors_consecutius >= max_errors:
                 debug("escoltar_mqtt aturat")
+                guardar_error("MQTT escolta aturada")
                 mqtt_escolta_activa = False
                 break
 
@@ -289,6 +290,7 @@ def publicar_posicio_segura(client, posicio):
 
     except Exception as error:
         debug("Error publicant posició:", error)
+        guardar_error("MQTT error publicar posicio:", error)
 
 
 def processar_ordre(topic, missatge):
@@ -346,6 +348,7 @@ def processar_ordre(topic, missatge):
 
     except Exception as error:
         debug("Error processant ordre MQTT:", error)
+        guardar_error("MQTT error processant ordre:", error)
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +367,7 @@ def verificar_hash(path, hash_esperat):
         return ubinascii.hexlify(h.digest()).decode() == hash_esperat
     except Exception as error:
         debug("Error verificant hash:", error)
+        guardar_error("OTA: error verificant hash:", error)
         return False
 
 
@@ -379,6 +383,7 @@ def executar_ota(fitxers, hashes, client):
 
         if resultat != 0:
             debug("Error descarregant:", nom)
+            guardar_error("OTA: error descarregant", nom)
             client.disconnect()
             return
 
@@ -441,6 +446,7 @@ def cicle_tracking(client):
         client, _ = connectar_mqtt()
     except Exception as error:
         debug("MQTT no disponible aquest cicle, continuo tracking:", error)
+        guardar_error("Tracking: MQTT no disponible:", error)   
         return client, True
 
     if fitxers_ota_pendents:
@@ -455,6 +461,37 @@ def cicle_tracking(client):
 
     return client, actiu_actual
 
+
+def guardar_error(*args):
+    try:
+        text = " ".join(str(x) for x in args)
+
+        with open(config.FITXER_LOG, "a") as f:
+            f.write(text + "\n")
+
+    except Exception:
+        pass
+
+
+def publicar_log(client):
+    try:
+        with open(config.FITXER_LOG, "r") as f:
+            contingut = f.read()
+
+        if not contingut:
+            return
+
+        client.publish(config.TOPIC_LOG, contingut)
+
+        try:
+            uos.remove(config.FITXER_LOG)
+        except Exception:
+            pass
+
+
+    except Exception as error:
+        debug("Error publicant log:", error)
+        guardar_error("log: error publicant:", error)
 
 # ---------------------------------------------------------------------------
 # main
@@ -488,6 +525,7 @@ def main():
     wdt.feed()
 
     if stage != 3 or state != 1:
+        guardar_error("XARXA no disponible:", stage, state)
         pm.autosleep(1)
         utime.sleep(120)
         return
@@ -496,6 +534,7 @@ def main():
         ntptime.settime(2)
     except Exception as error:
         debug("Error NTP:", error)
+        guardar_error("NTP error:", error)
     # endregion
 
     # region Connectar MQTT i publicar primera posició
@@ -503,6 +542,7 @@ def main():
         client, mqtt_time = connectar_mqtt()
     except Exception as error:
         debug("Error connectant MQTT:", error)
+        guardar_error("MQTT error connect:", error)
         pm.autosleep(1)
         utime.sleep(120)
         return
@@ -527,6 +567,8 @@ def main():
 
     # region Status final i PSM
     rsrp, rsrq = obtenir_senyal()
+    publicar_log(client)
+
     tau_demanat = calcular_tau_a_demanar()
 
     unitat_tau, valor_tau = (
@@ -571,6 +613,7 @@ def main():
         utime.sleep(2)
     except Exception as error:
         debug("Error publicant status:", error)
+        guardar_error("MQTT: error publicant status:", error)
     # endregion
 
     wdt.feed()
@@ -585,5 +628,7 @@ try:
     main()
 except Exception as error:
     debug("Error fatal a main:", error)
+    guardar_error("FATAL main:", error)
+
     pm.autosleep(1)
     utime.sleep(120)

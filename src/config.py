@@ -1,7 +1,7 @@
 """ Configuració del tracker """
 
 DEVICE_ID = "BG95"
-VERSIO = "1.0.15"
+VERSIO = "1.0.16"
 
 DEBUG = True
 
