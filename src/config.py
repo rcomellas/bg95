@@ -1,7 +1,7 @@
 """ Configuració del tracker """
 
 DEVICE_ID = "BG95"
-VERSIO = "1.0.14"
+VERSIO = "1.0.15"
 
 DEBUG = True
 
@@ -23,7 +23,7 @@ TEMPS_MAXIM_FIX = 10  # segons
 
 # PSM
 TAU_CURT = 180  # en segons
-TAU_LLARG = 180  # en segons
+TAU_LLARG = 5000  # en segons
 ACTIVE_TIME = 10  # en segons
 HORA_INICI_TAU_LLARG = 0
 HORA_FINAL_TAU_LLARG = 7
