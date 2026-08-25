@@ -1,9 +1,9 @@
 {
-  "version": "1.0.17",
+  "version": "1.0.18",
   "files": [
     "config.py"
   ],
   "hashes": {
-    "config.py": "8c9b0e6c89155a0ad1105c414bdcef1cc8e50fb8c8936f150a1b72ef33e3e4ce"
+    "config.py": "dae7bdf0c2eb72b891226c73fcd2b06b64267beac9d6673dc790d02b8fa210ba"
   }
 }

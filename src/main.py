@@ -376,27 +376,33 @@ def executar_ota(fitxers, hashes, client):
 
     for nom in fitxers:
         url = config.BASE_URL_OTA + nom
-        path = "/usr/" + nom
+        path_final = "/usr/" + nom
+        path_temp = "/usr/" + nom + ".tmp"
         wdt.feed()
 
-        resultat = ota.download(url, path)
+        resultat = ota.download(url, path_temp)
 
         if resultat != 0:
             debug("Error descarregant:", nom)
-            guardar_error("OTA: error descarregant", nom)
             client.disconnect()
             return
 
         hash_esperat = hashes.get(nom) if hashes else None
 
-        if hash_esperat and not verificar_hash(path, hash_esperat):
+        if hash_esperat and not verificar_hash(path_temp, hash_esperat):
             debug("Hash invàlid, OTA abortada:", nom)
             client.disconnect()
             return
 
+        # Només ara, amb el hash confirmat, substituïm el fitxer real
+        try:
+            uos.remove(path_final)
+        except Exception:
+            pass
+        uos.rename(path_temp, path_final)
+
     ota.set_update_flag()
     Power.powerRestart()
-
 
 # ---------------------------------------------------------------------------
 # tracking
