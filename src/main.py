@@ -51,20 +51,19 @@ def publicar_log(client):
         with open(config.FITXER_LOG, "r") as f:
             contingut = f.read()
 
-        if not contingut:
-            return
+    except OSError:
+        return
 
+    if not contingut:
+        return
+
+    try:
         client.publish(config.TOPIC_LOG, contingut)
-
-        try:
-            uos.remove(config.FITXER_LOG)
-        except Exception:
-            pass
-
+        uos.remove(config.FITXER_LOG)
 
     except Exception as error:
         debug("Error publicant log:", error)
-
+        
 # ---------------------------------------------------------------------------
 # gnss
 # ---------------------------------------------------------------------------
