@@ -293,6 +293,11 @@ def main():
         token = secrets_modul.TOKEN_FLESPI_MQTT
         topic = config_modul.TOPIC_ORDRES
 
+        if isinstance(host, bytes):
+            host = host.decode("utf-8")
+        if isinstance(topic, bytes):
+            topic = topic.decode("utf-8")
+
         publicar_ordre_ota(
             manifest=manifest,
             host=host,
