@@ -150,7 +150,8 @@ def generar_manifest(src_dir: Path, noms_fitxers: list, versio: str,
 # 4. Publicar per MQTT
 # ---------------------------------------------------------------------------
 
-def on_connect(client, userdata, flags, rc, properties=None):
+def on_connect(client, userdata, flags, rc, *extra):
+    # extra absorbeix 'properties' (paho-mqtt >= 2.0) sense trencar amb v1.x
     if rc == 0:
         print("Connectat al broker MQTT.")
     else:
@@ -182,7 +183,11 @@ def publicar_ordre_ota(manifest: dict, host: str, port: int, token: str,
         print("Cancel·lat.")
         sys.exit(0)
 
-    client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    if hasattr(mqtt, "CallbackAPIVersion"):
+        client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    else:
+        client = mqtt.Client()  # paho-mqtt < 2.0
+
     client.username_pw_set(token, token)
 
     if use_tls:
