@@ -400,8 +400,10 @@ def verificar_hash(path, hash_esperat, intents=5):
                     if not bloc:
                         break
                     h.update(bloc)
-            return ubinascii.hexlify(h.digest()).decode() == hash_esperat
-
+            hash_real = ubinascii.hexlify(h.digest()).decode()
+            debug("Esperat:", hash_esperat)
+            debug("Real:", hash_real)
+            return hash_real.lower() == hash_esperat.lower()
         except OSError as error:
             debug("Fitxer encara no llegible (intent", intent + 1, "/", intents, "):", error)
             utime.sleep(0.5)
