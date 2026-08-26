@@ -6,8 +6,6 @@ from umqtt import MQTTClient
 from machine import WDT
 from usr import secrets, config
 
-
-
 _thread.stack_size(16 * 1024)
 wdt = WDT(config.TEMPS_WATCHDOG)
 
@@ -53,16 +51,19 @@ def publicar_log(client):
         with open(config.FITXER_LOG, "r") as f:
             contingut = f.read()
 
-        if contingut:
-            client.publish(config.TOPIC_LOG, contingut)
-            uos.remove(config.FITXER_LOG)
-
     except OSError:
-        pass
+        return
+
+    if not contingut:
+        return
+
+    try:
+        client.publish(config.TOPIC_LOG, contingut)
+        uos.remove(config.FITXER_LOG)
 
     except Exception as error:
         debug("Error publicant log:", error)
-                
+        
 # ---------------------------------------------------------------------------
 # gnss
 # ---------------------------------------------------------------------------
@@ -531,8 +532,7 @@ def main():
         pm.set_psm_time(0)
 
     debug("Versió:", config.VERSIO)
-    
-    debug("POWER ON REASON:", Power.powerOnReason())
+
     if config.DEBUG:
         resposta = bytearray(100)
         atcmd.sendSync('AT+QGPSCFG="xtra_info"\r\n', resposta, "", 5)
@@ -552,18 +552,16 @@ def main():
 
     if stage != 3 or state != 1:
         guardar_error("Xarxa: error connexio:", stage, state)
-        debug("Xarxa: error connexio:", stage, state)
         pm.autosleep(1)
         utime.sleep(120)
         return
 
-    debug("Xarxa connectada")
     try:
         ntptime.settime(2)
     except Exception as error:
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
-    debug("Despres NTP")
+
     # endregion
 
     # region Connectar MQTT i publicar primera posició
@@ -578,7 +576,7 @@ def main():
         return
 
     utime.sleep(1)
-    debug("MQTT connectat")
+
     if fitxers_ota_pendents:
         executar_ota(fitxers_ota_pendents, hashes_ota_pendents, client)
         return
@@ -609,7 +607,7 @@ def main():
     )
 
     pm.set_psm_time(unitat_tau, valor_tau, 0, config.ACTIVE_TIME // 2)
-    
+
     proper = None
     tau_net = None
     active_time = None
