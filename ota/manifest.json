@@ -1,1 +1,9 @@
-
+{
+  "version": "1.0.20",
+  "files": [
+    "main.py"
+  ],
+  "hashes": {
+    "main.py": "d7c4713c07bc70a4a98438ce767f2519b20af6587313c59b25a5b5621db862df"
+  }
+}
