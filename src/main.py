@@ -91,59 +91,63 @@ def obtenir_posicio():
     quecgnss.setPriority(0)
     quecgnss.gnssEnable(1)
 
-    debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
-    inici = utime.ticks_ms()
-    posicio = None
+    try:
+        debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
+        inici = utime.ticks_ms()
+        posicio = None
 
-    while temps_transcorregut(inici) < config.TEMPS_MAXIM_FIX:
+        while temps_transcorregut(inici) < config.TEMPS_MAXIM_FIX:
+            wdt.feed()
+
+            try:
+                resultat = quecgnss.read(4096)
+            except Exception as error:
+                guardar_error("GNSS: error lectura:", error)
+                return None, temps_transcorregut(inici)
+            if resultat != -1 and resultat[0] > 0:
+                dades = resultat[1]
+
+                if isinstance(dades, bytes):
+                    dades = dades.decode("utf-8", "ignore")
+
+                rmc = None
+                gga = None
+
+                for linia in dades.split("\r\n"):
+                    if linia.startswith("$GPRMC"):
+                        camps = linia.split(",")
+                        if len(camps) > 6 and camps[2] == "A":
+                            rmc = camps
+                    elif linia.startswith("$GPGGA"):
+                        camps = linia.split(",")
+                        if len(camps) > 9 and camps[6] != "0":
+                            gga = camps
+
+                if rmc:
+                    latitud = convertir_coordenada(rmc[3], rmc[4], 2)
+                    longitud = convertir_coordenada(rmc[5], rmc[6], 3)
+                    satel_lits = int(gga[7]) if gga and gga[7] else 0
+                    posicio = (latitud, longitud, satel_lits)
+                    break
+
+                if config.DEBUG:
+                    _debug_cn0(dades, temps_transcorregut(inici))
+
+            utime.sleep(2)
+
+        gnss_time = temps_transcorregut(inici)
+
+        # quecgnss.gnssEnable(0)
+        # quecgnss.setPriority(1)
         wdt.feed()
 
-        try:
-            resultat = quecgnss.read(4096)
-        except Exception as error:
-            guardar_error("GNSS: error lectura:", error)
-            return None, temps_transcorregut(inici)
-        if resultat != -1 and resultat[0] > 0:
-            dades = resultat[1]
+        debug("Posició obtinguda en", gnss_time, "segons:", posicio)
 
-            if isinstance(dades, bytes):
-                dades = dades.decode("utf-8", "ignore")
+        return posicio, gnss_time
 
-            rmc = None
-            gga = None
-
-            for linia in dades.split("\r\n"):
-                if linia.startswith("$GPRMC"):
-                    camps = linia.split(",")
-                    if len(camps) > 6 and camps[2] == "A":
-                        rmc = camps
-                elif linia.startswith("$GPGGA"):
-                    camps = linia.split(",")
-                    if len(camps) > 9 and camps[6] != "0":
-                        gga = camps
-
-            if rmc:
-                latitud = convertir_coordenada(rmc[3], rmc[4], 2)
-                longitud = convertir_coordenada(rmc[5], rmc[6], 3)
-                satel_lits = int(gga[7]) if gga and gga[7] else 0
-                posicio = (latitud, longitud, satel_lits)
-                break
-
-            if config.DEBUG:
-                _debug_cn0(dades, temps_transcorregut(inici))
-
-        utime.sleep(2)
-
-    gnss_time = temps_transcorregut(inici)
-
-    quecgnss.gnssEnable(0)
-    quecgnss.setPriority(1)
-    wdt.feed()
-
-    debug("Posició obtinguda en", gnss_time, "segons:", posicio)
-
-    return posicio, gnss_time
-
+    finally:
+        quecgnss.gnssEnable(0)
+        quecgnss.setPriority(1)   
 
 def _debug_cn0(dades, temps):
     print("Sense fix:", temps, "s", end=" ")
@@ -483,7 +487,9 @@ def cicle_tracking(client):
     desconnectar_mqtt(client)
 
     debug("Tracking: espero", interval_actual, "segons (MQTT desconnectat)")
+    pm.autosleep(1)
     utime.sleep(interval_actual)
+    pm.autosleep(0)
 
     with lock_tracking:
         actiu_actual = tracking_actiu
@@ -561,7 +567,7 @@ def main():
         guardar_error("Xarxa: error connexio:", stage, state)
         debug("Xarxa: error connexio:", stage, state)
         pm.autosleep(1)
-        utime.sleep(120)
+        # utime.sleep(120)
         return
 
     debug("Xarxa connectada")
@@ -582,7 +588,7 @@ def main():
         guardar_error("MQTT: error connexio:", error)
 
         pm.autosleep(1)
-        utime.sleep(120)
+        # utime.sleep(120)
         return
 
     utime.sleep(1)
@@ -660,7 +666,7 @@ def main():
 
     debug("A dormir")
     pm.autosleep(1)
-    utime.sleep(120)
+    utime.sleep(30)
 
 
 try:
@@ -670,4 +676,4 @@ except Exception as error:
     guardar_error("Main: error fatal:", error)
 
     pm.autosleep(1)
-    utime.sleep(120)
+    utime.sleep(30)
