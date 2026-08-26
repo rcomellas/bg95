@@ -1,5 +1,5 @@
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
-import ntptime, uos, net, dataCall
+import ntptime, uos
 import ubinascii, uhashlib
 from misc import Power
 from umqtt import MQTTClient
@@ -29,7 +29,8 @@ lock_tracking = _thread.allocate_lock()
 # ---------------------------------------------------------------------------
 
 def temps_transcorregut(inici):
-    return utime.ticks_diff(utime.ticks_ms(), inici) // 1000
+    return utime.time() - inici
+
 
 def debug(*args):
     if config.DEBUG:
@@ -92,7 +93,7 @@ def obtenir_posicio():
     quecgnss.gnssEnable(1)
 
     debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
-    inici = utime.ticks_ms()
+    inici = utime.time()
     posicio = None
 
     while temps_transcorregut(inici) < config.TEMPS_MAXIM_FIX:
@@ -216,7 +217,7 @@ def connectar_mqtt(intents=3):
     el fil d'escolta. Reintenta amb backoff si falla."""
     global mqtt_escolta_activa
 
-    inici = utime.ticks_ms()
+    inici = utime.time()
     ultim_error = None
 
     for intent in range(1, intents + 1):
@@ -369,7 +370,7 @@ def processar_ordre(topic, missatge):
             with lock_tracking:
                 tracking_interval = nou_interval
                 tracking_max = nou_max
-                tracking_inici = utime.ticks_ms()
+                tracking_inici = utime.time()
                 tracking_actiu = True
 
             ordre_rebuda = True
@@ -416,7 +417,6 @@ def verificar_hash(path, hash_esperat, intents=5):
 
 
 def executar_ota(fitxers, hashes, client):
-    hashes = None  # TEMPORAL: desactiva verificació hash
     ota = app_fota.new()
 
     for nom in fitxers:
@@ -547,15 +547,11 @@ def main():
     # endregion
 
     # region Xarxa
-    inici = utime.ticks_ms()
-
+    inici = utime.time()
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
 
     wdt.feed()
-    debug("DESPRES CHECKNET:", stage, state, "net_time:", net_time)
-    debug("NET STATE POST:", net.getState())
-    debug("DATACALL POST:", dataCall.getInfo(1, 0))
 
     if stage != 3 or state != 1:
         guardar_error("Xarxa: error connexio:", stage, state)
@@ -565,12 +561,12 @@ def main():
         return
 
     debug("Xarxa connectada")
-
     try:
         ntptime.settime(2, 1, 10)
     except Exception as error:
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
+    debug("Despres NTP")
     # endregion
 
     # region Connectar MQTT i publicar primera posició
