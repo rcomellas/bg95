@@ -421,6 +421,7 @@ def executar_ota(fitxers, hashes, client):
         url = config.BASE_URL_OTA + nom
         path_final = "/usr/" + nom
         path_temp = "/usr/" + nom + ".tmp"
+        path_hash = "/usr/.updater" + path_temp
         wdt.feed()
 
         resultat = ota.download(url, path_temp)
@@ -432,7 +433,7 @@ def executar_ota(fitxers, hashes, client):
 
         hash_esperat = hashes.get(nom) if hashes else None
 
-        if hash_esperat and not verificar_hash(path_temp, hash_esperat):
+        if hash_esperat and not verificar_hash(path_hash, hash_esperat):
             debug("Hash invàlid, OTA abortada:", nom)
             try:
                 uos.remove(path_temp)
