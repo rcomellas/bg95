@@ -559,7 +559,7 @@ def main():
 
     debug("Xarxa connectada")
     try:
-        ntptime.settime(2)
+        ntptime.settime(2, 1, 10)
     except Exception as error:
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
@@ -568,6 +568,7 @@ def main():
 
     # region Connectar MQTT i publicar primera posició
     try:
+        debug("Connectant mqtt...")
         client, mqtt_time = connectar_mqtt()
     except Exception as error:
         debug("Error connectant MQTT:", error)
