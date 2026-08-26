@@ -445,12 +445,12 @@ def executar_ota(fitxers, hashes, client):
             return
 
         # Hash confirmat: ara sí, substituïm el fitxer real
-        try:
-            uos.remove(path_final)
-        except Exception:
-            pass
+        # try:
+        #     uos.remove(path_final)
+        # except Exception:
+        #     pass
 
-        uos.rename(path_temp, path_final)
+        # uos.rename(path_temp, path_final)
         debug("OTA:", nom, "actualitzat i verificat")
 
     ota.set_update_flag()
