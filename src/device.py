@@ -1,0 +1,1 @@
+device_id = b"bg95_02"

@@ -1,6 +1,6 @@
 """ Configuració del tracker """
 
-DEVICE_ID = "BG95"
+# DEVICE_ID = "BG95"
 VERSIO = "1.0.20"
 
 DEBUG = True
@@ -19,7 +19,7 @@ TOPIC_ORDRES = b"bg95/command"
 # TOPIC_DISCOVERY = b"homeassistant/device_tracker/bg95/config"
 
 # GNSS
-TEMPS_MAXIM_FIX = 10  # segons
+TEMPS_MAXIM_FIX = 120  # segons
 
 # PSM
 TAU_CURT = 180  # en segons

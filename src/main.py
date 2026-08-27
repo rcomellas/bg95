@@ -5,11 +5,15 @@ from misc import Power
 from umqtt import MQTTClient
 from machine import WDT
 from usr import secrets, config
-
+from usr import device
 
 
 _thread.stack_size(16 * 1024)
 wdt = WDT(config.TEMPS_WATCHDOG)
+
+TOPIC_POSICIO = device.DEVICE_ID + b"/" + config.TOPIC_POSICIO
+TOPIC_STATUS = device.DEVICE_ID + b"/" + config.TOPIC_STATUS
+TOPIC_ORDRES = device.DEVICE_ID + b"/" + config.TOPIC_ORDRES
 
 mqtt_escolta_activa = False
 
@@ -38,14 +42,19 @@ def debug(*args):
 
 def guardar_error(*args):
     try:
-        text = " ".join(str(x) for x in args)
+        if uos.stat(config.FITXER_LOG)[6] > 16 * 1024:
+            uos.remove(config.FITXER_LOG)
+    except Exception:
+        pass
 
+    try:
+        text = "%04d-%02d-%02d %02d:%02d:%02d " % utime.localtime()[:6] + " ".join(str(x) for x in args)
         with open(config.FITXER_LOG, "a") as f:
             f.write(text + "\n")
 
     except Exception:
         pass
-
+    
 
 def publicar_log(client):
     try:
@@ -53,7 +62,7 @@ def publicar_log(client):
             contingut = f.read()
 
         if contingut:
-            client.publish(config.TOPIC_LOG, contingut)
+            client.publish(TOPIC_LOG, contingut)
             uos.remove(config.FITXER_LOG)
 
     except OSError:
@@ -224,9 +233,11 @@ def connectar_mqtt(intents=3):
     ultim_error = None
 
     for intent in range(1, intents + 1):
+        client = None
+
         try:
             client = MQTTClient(
-                config.DEVICE_ID,
+                device.DEVICE_ID,
                 config.MQTT_HOST,
                 port=config.MQTT_PORT,
                 user=secrets.TOKEN_FLESPI_MQTT,
@@ -236,7 +247,7 @@ def connectar_mqtt(intents=3):
 
             client.set_callback(processar_ordre)
             client.connect()
-            client.subscribe(config.TOPIC_ORDRES, 0)
+            client.subscribe(TOPIC_ORDRES, 0)
 
             mqtt_escolta_activa = True
             _thread.start_new_thread(escoltar_mqtt, (client,))
@@ -280,7 +291,7 @@ def escoltar_mqtt(client):
             errors_consecutius = 0
 
             if ordre_rebuda:
-                client.publish(config.TOPIC_ORDRES, b"", True)
+                client.publish(TOPIC_ORDRES, b"", True)
                 ordre_rebuda = False
 
                 if fitxers_ota_pendents:
@@ -313,9 +324,8 @@ def publicar_posicio_segura(client, posicio):
         latitud, longitud, satel_lits = posicio
 
         client.publish(
-            config.TOPIC_POSICIO,
+            TOPIC_POSICIO,
             ujson.dumps({
-                "id": config.DEVICE_ID,
                 "latitude": latitud,
                 "longitude": longitud,
                 "sat": satel_lits
@@ -653,7 +663,7 @@ def main():
     }
 
     try:
-        client.publish(config.TOPIC_STATUS, ujson.dumps(status), True)
+        client.publish(TOPIC_STATUS, ujson.dumps(status), True)
         debug("Publicat status:", status)
         utime.sleep(2)
     except Exception as error:
