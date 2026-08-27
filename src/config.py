@@ -13,9 +13,10 @@ TEMPS_REINTENT_XARXA = 30
 MQTT_HOST = "mqtt.flespi.io"
 MQTT_PORT = 1883
 
-TOPIC_POSICIO = b"bg95/location"
-TOPIC_STATUS = b"bg95/status"
-TOPIC_ORDRES = b"bg95/command"
+TOPIC_POSICIO = b"/location"
+TOPIC_STATUS = b"/status"
+TOPIC_ORDRES = b"/command"
+TOPIC_LOG = b"/log_errors"
 # TOPIC_DISCOVERY = b"homeassistant/device_tracker/bg95/config"
 
 # GNSS

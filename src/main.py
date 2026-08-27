@@ -11,9 +11,10 @@ from usr import device
 _thread.stack_size(16 * 1024)
 wdt = WDT(config.TEMPS_WATCHDOG)
 
-TOPIC_POSICIO = device.DEVICE_ID + b"/" + config.TOPIC_POSICIO
-TOPIC_STATUS = device.DEVICE_ID + b"/" + config.TOPIC_STATUS
-TOPIC_ORDRES = device.DEVICE_ID + b"/" + config.TOPIC_ORDRES
+TOPIC_POSICIO = device.DEVICE_ID + config.TOPIC_POSICIO
+TOPIC_STATUS = device.DEVICE_ID + config.TOPIC_STATUS
+TOPIC_ORDRES = device.DEVICE_ID + config.TOPIC_ORDRES
+TOPIC_LOG = device.DEVICE_ID + config.TOPIC_LOG
 
 mqtt_escolta_activa = False
 
@@ -549,6 +550,7 @@ def main():
     if pm.get_psm_time()[0]:
         pm.set_psm_time(0)
 
+    debug("Dispositiu:", device.DEVICE_ID.decode())
     debug("Versió:", config.VERSIO)
     
     debug("POWER ON REASON:", Power.powerOnReason())
