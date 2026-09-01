@@ -20,7 +20,7 @@ TOPIC_LOG = b"/log_errors"
 # TOPIC_DISCOVERY = b"homeassistant/device_tracker/bg95/config"
 
 # GNSS
-TEMPS_MAXIM_FIX = 120  # segons
+TEMPS_MAXIM_FIX = 100  # segons
 
 # PSM
 TAU_CURT = 180  # en segons

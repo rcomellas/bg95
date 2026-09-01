@@ -1,11 +1,9 @@
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
-import ntptime, uos, net, dataCall
-import ubinascii, uhashlib
+import ntptime, uos, net, dataCall, ubinascii, uhashlib
 from misc import Power
 from umqtt import MQTTClient
 from machine import WDT
-from usr import secrets, config
-from usr import device
+from usr import secrets, config, device
 
 
 _thread.stack_size(16 * 1024)
@@ -35,6 +33,7 @@ lock_tracking = _thread.allocate_lock()
 
 def temps_transcorregut(inici):
     return utime.ticks_diff(utime.ticks_ms(), inici) // 1000
+
 
 def debug(*args):
     if config.DEBUG:
@@ -72,6 +71,7 @@ def publicar_log(client):
     except Exception as error:
         debug("Error publicant log:", error)
                 
+
 # ---------------------------------------------------------------------------
 # gnss
 # ---------------------------------------------------------------------------
@@ -159,6 +159,7 @@ def obtenir_posicio():
         quecgnss.gnssEnable(0)
         quecgnss.setPriority(1)   
 
+
 def _debug_cn0(dades, temps):
     print("Sense fix:", temps, "s", end=" ")
     cn0 = []
@@ -188,11 +189,11 @@ def obtenir_senyal():
     try:
         r = bytearray(100)
         atcmd.sendSync("AT+QCSQ\r\n", r, "", 2)
-        d = bytes(r).decode().split(":")[1].split(",")
+        text = bytes(r).decode("utf-8", "ignore").replace("\x00", "").strip()
+        d = text.split(":")[1].split(",")
         return int(d[2]), int(d[4])
     except Exception:
         return None, None
-
 
 def calcular_tau_a_demanar():
     hora = utime.localtime()[3]
@@ -547,29 +548,17 @@ def main():
     global tracking_inici
     global fitxers_ota_pendents
 
-    if pm.get_psm_time()[0]:
+    if pm.get_psm_time()[0]: # si psm esta activat, desactivar-lo
         pm.set_psm_time(0)
 
     debug("Dispositiu:", device.DEVICE_ID.decode())
-    debug("Versió:", config.VERSIO)
-    
-    debug("POWER ON REASON:", Power.powerOnReason())
-    if config.DEBUG:
-        resposta = bytearray(100)
-        atcmd.sendSync('AT+QGPSCFG="xtra_info"\r\n', resposta, "", 5)
-        text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "").strip()
-        debug("XTRA info:", text)
+    debug("Versió SW:", config.VERSIO)
+    debug("PWR-ON REASON:", Power.powerOnReason())
 
-    # region Fix GNSS abans de xarxa (ràdio compartida, no cal esperar LTE)
-    posicio, gnss_time = obtenir_posicio()
-    # endregion
-
-    # region Xarxa
+    # Connexió Xarxa
     inici = utime.ticks_ms()
-
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
-
     wdt.feed()
     debug("DESPRES CHECKNET:", stage, state, "net_time:", net_time)
     debug("NET STATE POST:", net.getState())
@@ -584,14 +573,24 @@ def main():
 
     debug("Xarxa connectada")
 
+    # sincronitzacio NTP
     try:
         ntptime.settime(2, 1, 10)
     except Exception as error:
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
-    # endregion
+    
+    # Info fitxer XTRA
+    if config.DEBUG:
+        resposta = bytearray(100)
+        atcmd.sendSync('AT+QGPSCFG="xtra_info"\r\n', resposta, "", 5)
+        text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "").strip()
+        debug("XTRA info:", text)
 
-    # region Connectar MQTT i publicar primera posició
+    # Obtenir posició GNSS 
+    posicio, gnss_time = obtenir_posicio()
+        
+    # Connectar MQTT i publicar primera posició
     try:
         debug("Connectant mqtt...")
         client, mqtt_time = connectar_mqtt()
@@ -610,22 +609,21 @@ def main():
         return
 
     publicar_posicio_segura(client, posicio)
-    # endregion
-
-    # region Tracking (si s'ha activat via ordre retained o rebuda ara)
+    
+    # Tracking (si s'ha activat via ordre retained o rebuda ara)
     while tracking_actiu:
         client, tracking_actiu = cicle_tracking(client)
 
         if fitxers_ota_pendents:
             return
-    # endregion
 
     with lock_tracking:
         tracking_inici = None
 
-    # region Status final i PSM
     publicar_log(client)
     rsrp, rsrq = obtenir_senyal()
+
+    # Negociació PSM
     tau_demanat = calcular_tau_a_demanar()
 
     unitat_tau, valor_tau = (
@@ -649,6 +647,7 @@ def main():
             )[3:6]
             break
 
+    # Publicar status
     status = {
         "version": config.VERSIO,
         "bat": Power.getVbatt(),
@@ -671,8 +670,6 @@ def main():
     except Exception as error:
         debug("Error publicant status:", error)
         guardar_error("MQTT: error publicant status:", error)
-    # endregion
-
     wdt.feed()
     desconnectar_mqtt(client)
 
@@ -688,4 +685,4 @@ except Exception as error:
     guardar_error("Main: error fatal:", error)
 
     pm.autosleep(1)
-    utime.sleep(30)
+    # utime.sleep(30)
