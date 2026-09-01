@@ -1,8 +1,5 @@
 """ Configuració del tracker """
 
-# DEVICE_ID = "BG95"
-VERSIO = "1.0.20"
-
 DEBUG = True
 
 # XARXA

@@ -1,3 +1,6 @@
+# main.py — Tracker BG95-M3
+VERSIO = "1.0.21"
+
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
 from misc import Power
@@ -552,7 +555,7 @@ def main():
         pm.set_psm_time(0)
 
     debug("Dispositiu:", device.DEVICE_ID.decode())
-    debug("Versió SW:", config.VERSIO)
+    debug("Versió SW:", VERSIO)
     debug("PWR-ON REASON:", Power.powerOnReason())
 
     # Connexió Xarxa
@@ -649,7 +652,7 @@ def main():
 
     # Publicar status
     status = {
-        "version": config.VERSIO,
+        "version": VERSIO,
         "bat": Power.getVbatt(),
         "tau_req": tau_demanat,
         "tau_net": tau_net,
