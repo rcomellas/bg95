@@ -1,9 +1,11 @@
 {
-  "version": "1.0.20",
+  "version": "1.0.22",
   "files": [
-    "main.py"
+    "main.py",
+    "config.py"
   ],
   "hashes": {
-    "main.py": "eda37ac452195fdb9fba7041dcc5a128cc27908eea5ff9068edf2884e658f79d"
+    "main.py": "4d9220a1db9c5b05981185a7cc46e59626b7fd4f29d0fed20a10393116463558",
+    "config.py": "936158f6ddc2e4cb3811105aaa0d663f631b2c1527e8d44a98df93417ff728fd"
   }
 }

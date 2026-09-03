@@ -1,5 +1,6 @@
 """ Configuració del tracker """
 
+VERSIO = "1.0.22"
 DEBUG = True
 
 # XARXA
