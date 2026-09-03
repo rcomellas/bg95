@@ -9,7 +9,7 @@ acaben dins /usr/ al filesystem del BG95 — localment no cal aquesta
 carpeta intermèdia), així que no hi ha res a mantenir sincronitzat a banda.
 
 Passos:
-  1. Actualitza VERSIO dins usr/config.py
+  1. Actualitza VERSIO dins src/main.py
   2. Genera manifest.json (hashes sha256 dels fitxers a publicar)
   3. git add + commit + push
   4. Publica l'ordre OTA per MQTT (amb confirmació abans d'enviar)
@@ -24,7 +24,9 @@ Requereix: pip install paho-mqtt
     python deploy_ota.py 1.4.3 --wait-ack 30
 
 Assumeix:
-  - src/config.py conté VERSIO, MQTT_HOST, TOPIC_ORDRES
+  - src/main.py conté VERSIO
+  - src/config.py conté MQTT_HOST, TOPIC_ORDRES
+  - src/device.py conté DEVICE_ID
   - src/secrets.py conté TOKEN_FLESPI_MQTT
   - Els fitxers a publicar són els indicats a --files (per defecte: main.py config.py)
   - Un repositori git ja inicialitzat amb remot configurat
@@ -82,13 +84,13 @@ def run(cmd, check=True):
 # 1. Versió
 # ---------------------------------------------------------------------------
 
-def actualitzar_versio(config_path: Path, versio: str):
-    text = config_path.read_text()
+def actualitzar_versio(main_path: Path, versio: str):
+    text = main_path.read_text()
     patro = re.compile(r'^(VERSIO\s*=\s*)["\'].*["\']', re.MULTILINE)
 
     if not patro.search(text):
         print(
-            f"Error: no s'ha trobat cap línia 'VERSIO = \"...\"' a {config_path}.\n"
+            f"Error: no s'ha trobat cap línia 'VERSIO = \"...\"' a {main_path}.\n"
             "Actualitza-la manualment i torna a córrer amb --skip-version.",
             file=sys.stderr
         )
@@ -99,8 +101,8 @@ def actualitzar_versio(config_path: Path, versio: str):
     if nou_text == text:
         print(f"VERSIO ja era '{versio}', no cal canviar res.")
     else:
-        config_path.write_text(nou_text)
-        print(f"VERSIO actualitzada a '{versio}' dins {config_path}")
+        main_path.write_text(nou_text)
+        print(f"VERSIO actualitzada a '{versio}' dins {main_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +251,9 @@ def main():
     args = parser.parse_args()
 
     src_dir = Path(args.src_dir)
+    main_path = src_dir / "main.py"
     config_path = src_dir / "config.py"
+    device_path = src_dir / "device.py"
     secrets_path = src_dir / "secrets.py"
     manifest_path = Path(args.manifest_out)
     commit_msg = args.commit_msg or f"OTA v{args.version}"
@@ -259,7 +263,7 @@ def main():
     # 1. Versió
     if not args.skip_version:
         print("-- Pas 1/4: actualitzar VERSIO --")
-        actualitzar_versio(config_path, args.version)
+        actualitzar_versio(main_path, args.version)
     else:
         print("-- Pas 1/4: omès (--skip-version) --")
 
@@ -287,16 +291,23 @@ def main():
         print("\n-- Pas 4/4: publicar ordre OTA per MQTT --")
 
         config_modul = carregar_modul(config_path, "device_config")
+        device_modul = carregar_modul(device_path, "device_config_id")
         secrets_modul = carregar_modul(secrets_path, "device_secrets")
 
         host = config_modul.MQTT_HOST
         token = secrets_modul.TOKEN_FLESPI_MQTT
-        topic = config_modul.TOPIC_ORDRES
+        device_id = device_modul.DEVICE_ID
+        topic_base = config_modul.TOPIC_ORDRES
+
+        if isinstance(device_id, bytes):
+            device_id = device_id.decode("utf-8")
+        if isinstance(topic_base, bytes):
+            topic_base = topic_base.decode("utf-8")
+
+        topic = device_id + topic_base
 
         if isinstance(host, bytes):
             host = host.decode("utf-8")
-        if isinstance(topic, bytes):
-            topic = topic.decode("utf-8")
 
         publicar_ordre_ota(
             manifest=manifest,

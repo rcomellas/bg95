@@ -578,11 +578,12 @@ def main():
 
     # sincronitzacio NTP
     try:
-        ntptime.settime(2, 1, 10)
+        ntp_ret = ntptime.settime(2, 1, 10)
     except Exception as error:
+        ntp_ret = None
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
-    
+            
     # Info fitxer XTRA
     if config.DEBUG:
         resposta = bytearray(100)
@@ -663,9 +664,11 @@ def main():
         "mqtt_time": mqtt_time,
         "fix": posicio is not None,
         "rsrp": rsrp,
-        "rsrq": rsrq
+        "rsrq": rsrq,
+        "ntp_ret": ntp_ret,
+        "timezone": utime.getTimeZone(),
+        "hora": "%02d:%02d:%02d" % utime.localtime()[3:6]
     }
-
     try:
         client.publish(TOPIC_STATUS, ujson.dumps(status), True)
         debug("Publicat status:", status)
