@@ -1,9 +1,9 @@
 {
-  "version": "1.0.26",
+  "version": "1.0.27",
   "files": [
     "main.py"
   ],
   "hashes": {
-    "main.py": "a9e6de2e63584d6fd10a04515ebc7dcb98ddb0c1b2af595ffa5a2d8998bba48f"
+    "main.py": "6572d3dfa973d12cd15c7e13e3a3a0050e0797d6aca14451451546c48966befc"
   }
 }
