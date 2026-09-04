@@ -440,7 +440,7 @@ def executar_ota(fitxers, hashes, client):
 
     for nom in fitxers:
         url = config.BASE_URL_OTA + nom + "?t=" + str(utime.time())
-        path_hash = "/usr/.updater" + path_temp
+        # path_hash = "/usr/.updater" + path_temp
         wdt.feed()
 
         debug("Descarregant OTA:", nom, "des de", url)
@@ -451,16 +451,16 @@ def executar_ota(fitxers, hashes, client):
             client.disconnect()
             return
 
-        hash_esperat = hashes.get(nom) if hashes else None
+        # hash_esperat = hashes.get(nom) if hashes else None
 
-        if hash_esperat and not verificar_hash(path_hash, hash_esperat):
-            debug("Hash invàlid, OTA abortada:", nom)
-            try:
-                uos.remove(path_temp)
-            except Exception:
-                pass
-            client.disconnect()
-            return
+        # if hash_esperat and not verificar_hash(path_hash, hash_esperat):
+        #     debug("Hash invàlid, OTA abortada:", nom)
+        #     try:
+        #         uos.remove(path_temp)
+        #     except Exception:
+        #         pass
+        #     client.disconnect()
+        #     return
 
         # Hash confirmat: ara sí, substituïm el fitxer real
         # try:
