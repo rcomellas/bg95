@@ -1,3 +1,4 @@
+s
 # main.py — Tracker BG95-M3
 VERSIO = "1.0.30"
 
@@ -444,6 +445,7 @@ def executar_ota(fitxers, hashes, client):
         path_hash = "/usr/.updater" + path_temp
         wdt.feed()
 
+        debug()
         resultat = ota.download(url, path_temp)
 
         if resultat != 0:
