@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.35"
+VERSIO = "1.0.36"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -552,9 +552,11 @@ def main():
     if pm.get_psm_time()[0]: # si psm esta activat, desactivar-lo
         pm.set_psm_time(0)
 
-    debug("Dispositiu:", device.DEVICE_ID.decode())
-    debug("Versió SW:", VERSIO)
-    debug("PWR-ON REASON:", Power.powerOnReason())
+    if config.DEBUG:
+        utime.sleep(2)
+        debug("Dispositiu:", device.DEVICE_ID.decode())
+        debug("Versió SW:", VERSIO)
+        debug("PWR-ON REASON:", Power.powerOnReason())
 
     # Connexió Xarxa
     inici = utime.ticks_ms()
