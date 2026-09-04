@@ -445,6 +445,7 @@ def executar_ota(fitxers, hashes, client):
         wdt.feed()
 
         debug("Descarregant OTA:", nom, "des de", url)
+        utime.sleep(5)
         resultat = ota.download(url, path_temp)
 
         if resultat != 0:
