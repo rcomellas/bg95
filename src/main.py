@@ -444,7 +444,7 @@ def executar_ota(fitxers, hashes, client):
         path_hash = "/usr/.updater" + path_temp
         wdt.feed()
 
-        debug()
+        debug("Descarregant OTA:", nom, "des de", url)
         resultat = ota.download(url, path_temp)
 
         if resultat != 0:
