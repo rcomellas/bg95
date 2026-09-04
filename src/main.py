@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.31"
+VERSIO = "1.0.32"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -440,14 +440,12 @@ def executar_ota(fitxers, hashes, client):
 
     for nom in fitxers:
         url = config.BASE_URL_OTA + nom + "?t=" + str(utime.time())
-        path_temp = "/usr/" + nom + ".tmp"
         path_hash = "/usr/.updater" + path_temp
         wdt.feed()
 
         debug("Descarregant OTA:", nom, "des de", url)
         utime.sleep(5)
-        resultat = ota.download(url, path_temp)
-
+        resultat = ota.download(url, "/usr/" + nom)
         if resultat != 0:
             debug("Error descarregant:", nom)
             client.disconnect()
