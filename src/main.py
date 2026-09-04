@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.36"
+VERSIO = "1.0.37"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -435,44 +435,45 @@ def verificar_hash(path, hash_esperat, intents=5):
 
 
 def executar_ota(fitxers, hashes, client):
-    hashes = None  # TEMPORAL: desactiva verificació hash
     ota = app_fota.new()
 
     for nom in fitxers:
         url = config.BASE_URL_OTA + nom + "?t=" + str(utime.time())
-        # path_hash = "/usr/.updater" + path_temp
+        path_final = "/usr/" + nom
+        path_hash = "/usr/.updater" + path_final
+
         wdt.feed()
 
         debug("Descarregant OTA:", nom, "des de", url)
         utime.sleep(5)
-        resultat = ota.download(url, "/usr/" + nom)
+
+        resultat = ota.download(url, path_final)
+
         if resultat != 0:
             debug("Error descarregant:", nom)
             client.disconnect()
             return
 
-        # hash_esperat = hashes.get(nom) if hashes else None
+        hash_esperat = hashes.get(nom) if hashes else None
 
-        # if hash_esperat and not verificar_hash(path_hash, hash_esperat):
-        #     debug("Hash invàlid, OTA abortada:", nom)
-        #     try:
-        #         uos.remove(path_temp)
-        #     except Exception:
-        #         pass
-        #     client.disconnect()
-        #     return
+        if not hash_esperat:
+            debug("OTA abortada: falta hash per", nom)
+            client.disconnect()
+            return
 
-        # Hash confirmat: ara sí, substituïm el fitxer real
-        # try:
-        #     uos.remove(path_final)
-        # except Exception:
-        #     pass
+        if not verificar_hash(path_hash, hash_esperat):
+            debug("Hash invàlid, OTA abortada:", nom)
+            try:
+                uos.remove(path_hash)
+            except Exception:
+                pass
+            client.disconnect()
+            return
 
         debug("OTA:", nom, "actualitzat i verificat")
-    
+
     ota.set_update_flag()
     Power.powerRestart()
-
 
 # ---------------------------------------------------------------------------
 # tracking
