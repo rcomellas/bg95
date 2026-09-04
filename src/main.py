@@ -1,4 +1,3 @@
-s
 # main.py — Tracker BG95-M3
 VERSIO = "1.0.30"
 
