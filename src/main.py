@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.24"
+VERSIO = "1.0.25"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -670,8 +670,8 @@ def main():
         "hora": "%02d:%02d:%02d" % utime.localtime()[3:6]
     }
     try:
-        client.publish(TOPIC_STATUS, ujson.dumps(status), True)
-        debug("Publicat status:", status)
+        client.publish(TOPIC_STATUS, ujson.dumps(status), True, 1)
+        debug("Status publicat i confirmat pel broker:", status)
         utime.sleep(2)
     except Exception as error:
         debug("Error publicant status:", error)
