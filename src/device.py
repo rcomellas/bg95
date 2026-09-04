@@ -1,1 +1,1 @@
-DEVICE_ID = b"bg95"
+DEVICE_ID = b"bg95_02"
