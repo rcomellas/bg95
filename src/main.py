@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.27"
+VERSIO = "1.0.28"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -471,9 +471,7 @@ def executar_ota(fitxers, hashes, client):
 
         # uos.rename(path_temp, path_final)
         debug("OTA:", nom, "actualitzat i verificat")
-    with open("/usr/main.py", "r") as f:
-        for _ in range(5):
-            print(f.readline())
+    
     ota.set_update_flag()
     Power.powerRestart()
 
@@ -565,9 +563,9 @@ def main():
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
     wdt.feed()
-    debug("DESPRES CHECKNET:", stage, state, "net_time:", net_time)
-    debug("NET STATE POST:", net.getState())
-    debug("DATACALL POST:", dataCall.getInfo(1, 0))
+    # debug("DESPRES CHECKNET:", stage, state, "net_time:", net_time)
+    # debug("NET STATE POST:", net.getState())
+    # debug("DATACALL POST:", dataCall.getInfo(1, 0))
 
     if stage != 3 or state != 1:
         guardar_error("Xarxa: error connexio:", stage, state)
@@ -693,4 +691,4 @@ except Exception as error:
     guardar_error("Main: error fatal:", error)
 
     pm.autosleep(1)
-    # utime.sleep(30)
+    utime.sleep(120)
