@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.38"
+VERSIO = "1.0.40"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -579,6 +579,7 @@ def main():
 
     # sincronitzacio NTP
     try:
+        utime.setTimeZone(2)
         ntp_ret = ntptime.settime(2, 1, 10)
     except Exception as error:
         ntp_ret = None
