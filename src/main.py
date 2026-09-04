@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.29"
+VERSIO = "1.0.30"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -439,7 +439,7 @@ def executar_ota(fitxers, hashes, client):
     ota = app_fota.new()
 
     for nom in fitxers:
-        url = config.BASE_URL_OTA + nom + "?t=" + str(utime.time())        path_final = "/usr/" + nom
+        url = config.BASE_URL_OTA + nom + "?t=" + str(utime.time())
         path_temp = "/usr/" + nom + ".tmp"
         path_hash = "/usr/.updater" + path_temp
         wdt.feed()
@@ -468,7 +468,6 @@ def executar_ota(fitxers, hashes, client):
         # except Exception:
         #     pass
 
-        # uos.rename(path_temp, path_final)
         debug("OTA:", nom, "actualitzat i verificat")
     
     ota.set_update_flag()
