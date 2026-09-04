@@ -33,7 +33,7 @@ TRACKING_INTERVAL_MAX = 120  # en segons
 TRACKING_MAX_DEFECTE = 600  # en segons
 
 # OTA
-BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/main/src/"
+BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/ota/src/"
 
 # LOG ERRORS
 FITXER_LOG = "/usr/bg95.error.log"
