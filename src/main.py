@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.28"
+VERSIO = "1.0.38"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -435,17 +435,19 @@ def verificar_hash(path, hash_esperat, intents=5):
 
 
 def executar_ota(fitxers, hashes, client):
-    hashes = None  # TEMPORAL: desactiva verificació hash
     ota = app_fota.new()
 
     for nom in fitxers:
-        url = config.BASE_URL_OTA + nom
+        url = config.BASE_URL_OTA + nom + "?t=" + str(utime.time())
         path_final = "/usr/" + nom
-        path_temp = "/usr/" + nom + ".tmp"
-        path_hash = "/usr/.updater" + path_temp
+        path_hash = "/usr/.updater" + path_final
+
         wdt.feed()
 
-        resultat = ota.download(url, path_temp)
+        debug("Descarregant OTA:", nom, "des de", url)
+        utime.sleep(5)
+
+        resultat = ota.download(url, path_final)
 
         if resultat != 0:
             debug("Error descarregant:", nom)
@@ -454,27 +456,24 @@ def executar_ota(fitxers, hashes, client):
 
         hash_esperat = hashes.get(nom) if hashes else None
 
-        if hash_esperat and not verificar_hash(path_hash, hash_esperat):
+        if not hash_esperat:
+            debug("OTA abortada: falta hash per", nom)
+            client.disconnect()
+            return
+
+        if not verificar_hash(path_hash, hash_esperat):
             debug("Hash invàlid, OTA abortada:", nom)
             try:
-                uos.remove(path_temp)
+                uos.remove(path_hash)
             except Exception:
                 pass
             client.disconnect()
             return
 
-        # Hash confirmat: ara sí, substituïm el fitxer real
-        # try:
-        #     uos.remove(path_final)
-        # except Exception:
-        #     pass
-
-        # uos.rename(path_temp, path_final)
         debug("OTA:", nom, "actualitzat i verificat")
-    
+
     ota.set_update_flag()
     Power.powerRestart()
-
 
 # ---------------------------------------------------------------------------
 # tracking
@@ -554,9 +553,11 @@ def main():
     if pm.get_psm_time()[0]: # si psm esta activat, desactivar-lo
         pm.set_psm_time(0)
 
-    debug("Dispositiu:", device.DEVICE_ID.decode())
-    debug("Versió SW:", VERSIO)
-    debug("PWR-ON REASON:", Power.powerOnReason())
+    if config.DEBUG:
+        utime.sleep(2)
+        debug("Dispositiu:", device.DEVICE_ID.decode())
+        debug("Versió SW:", VERSIO)
+        debug("PWR-ON REASON:", Power.powerOnReason())
 
     # Connexió Xarxa
     inici = utime.ticks_ms()

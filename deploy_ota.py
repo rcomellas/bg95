@@ -10,9 +10,8 @@ carpeta intermèdia), així que no hi ha res a mantenir sincronitzat a banda.
 
 Passos:
   1. Actualitza VERSIO dins src/main.py
-  2. Genera manifest.json (hashes sha256 dels fitxers a publicar)
-  3. git add + commit + push
-  4. Publica l'ordre OTA per MQTT (amb confirmació abans d'enviar)
+  2. Publica els fitxers en una branca OTA separada amb git worktree
+  3. Publica l'ordre OTA per MQTT com a retained
 
 Requereix: pip install paho-mqtt
 
@@ -21,15 +20,14 @@ Requereix: pip install paho-mqtt
     python deploy_ota.py 1.4.3 --files main.py config.py
     python deploy_ota.py 1.4.3 --skip-git
     python deploy_ota.py 1.4.3 --skip-publish
-    python deploy_ota.py 1.4.3 --wait-ack 30
 
 Assumeix:
   - src/main.py conté VERSIO
   - src/config.py conté MQTT_HOST, TOPIC_ORDRES
   - src/device.py conté DEVICE_ID
   - src/secrets.py conté TOKEN_FLESPI_MQTT
-  - Els fitxers a publicar són els indicats a --files (per defecte: main.py config.py)
-  - Un repositori git ja inicialitzat amb remot configurat
+  - Els fitxers a publicar són els indicats a --files (per defecte: main.py)
+  - Un repositori git ja inicialitzat amb remot 'origin' configurat
 """
 
 import argparse
@@ -37,9 +35,10 @@ import hashlib
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
-import time
+import tempfile
 from pathlib import Path
 
 try:
@@ -51,9 +50,6 @@ except ImportError:
         file=sys.stderr
     )
     sys.exit(1)
-
-
-ack_rebut = {"valor": False}
 
 
 # ---------------------------------------------------------------------------
@@ -106,21 +102,14 @@ def actualitzar_versio(main_path: Path, versio: str):
 
 
 # ---------------------------------------------------------------------------
-# 2. Manifest
+# 2. Preparar fitxers / hashes Git
 # ---------------------------------------------------------------------------
 
-def calcular_sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for bloc in iter(lambda: f.read(8192), b""):
-            h.update(bloc)
-    return h.hexdigest()
+def calcular_sha256_bytes(dades: bytes) -> str:
+    return hashlib.sha256(dades).hexdigest()
 
 
-def generar_manifest(src_dir: Path, noms_fitxers: list, versio: str,
-                      output: Path, max_size_kb: int) -> dict:
-    hashes = {}
-
+def validar_fitxers_locals(src_dir: Path, noms_fitxers: list, max_size_kb: int):
     for nom in noms_fitxers:
         path = src_dir / nom
 
@@ -129,23 +118,104 @@ def generar_manifest(src_dir: Path, noms_fitxers: list, versio: str,
             sys.exit(1)
 
         mida_kb = path.stat().st_size / 1024
-
         if mida_kb > max_size_kb:
             print(
                 f"AVÍS: {nom} fa {mida_kb:.1f} KB, supera el límit de {max_size_kb} KB.",
                 file=sys.stderr
             )
 
-        hash_hex = calcular_sha256(path)
+
+def calcular_hashes_git(repo: Path, ref: str, noms_fitxers: list) -> dict:
+    hashes = {}
+
+    for nom in noms_fitxers:
+        ruta_git = f"src/{nom}"
+        try:
+            dades = subprocess.check_output(
+                ["git", "-C", str(repo), "show", f"{ref}:{ruta_git}"]
+            )
+        except subprocess.CalledProcessError:
+            print(
+                f"Error: no s'ha pogut llegir {ruta_git} de {ref}.",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
+        hash_hex = calcular_sha256_bytes(dades)
         hashes[nom] = hash_hex
+        print(f"  {nom:30s} sha256:{hash_hex}")
 
-        print(f"  {nom:30s} {mida_kb:7.1f} KB   sha256:{hash_hex[:12]}...")
+    return hashes
 
-    manifest = {"version": versio, "files": noms_fitxers, "hashes": hashes}
-    output.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 
-    print(f"\nManifest generat: {output}")
-    return manifest
+# ---------------------------------------------------------------------------
+# 3. Publicar fitxers a la branca OTA sense canviar la branca actual
+# ---------------------------------------------------------------------------
+
+def publicar_branca_ota(src_dir: Path, noms_fitxers: list,
+                        commit_msg: str, branca: str = "ota"):
+    """
+    Publica els fitxers OTA en una branca separada utilitzant un worktree
+    temporal. No canvia la branca actual ni fa commits a main.
+    """
+
+    # Actualitza referències remotes.
+    run(["git", "fetch", "origin"])
+
+    # Comprova si la branca remota ja existeix.
+    resultat = subprocess.run(
+        ["git", "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branca}"]
+    )
+    branca_remota_existeix = resultat.returncode == 0
+
+    # git worktree add vol una ruta que encara no existeixi.
+    worktree = Path(tempfile.mkdtemp(prefix="bg95_ota_"))
+    worktree.rmdir()
+
+    try:
+        if branca_remota_existeix:
+            run(["git", "worktree", "add", "--detach", str(worktree), f"origin/{branca}"])
+        else:
+            # Primera publicació: parteix de l'HEAD actual, però sense tocar-lo.
+            run(["git", "worktree", "add", "--detach", str(worktree), "HEAD"])
+
+        # Copia només els fitxers seleccionats, mantenint-los dins src/.
+        for nom in noms_fitxers:
+            origen = src_dir / nom
+            desti = worktree / "src" / nom
+            desti.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(origen, desti)
+            print(f"  OTA: src/{nom}")
+
+        run(["git", "-C", str(worktree), "add", "-A"])
+
+        canvis = subprocess.run(
+            ["git", "-C", str(worktree), "diff", "--cached", "--quiet"]
+        ).returncode != 0
+
+        if canvis:
+            run(["git", "-C", str(worktree), "commit", "-m", commit_msg])
+        else:
+            print("La branca OTA ja conté exactament aquests fitxers.")
+
+        # Calcula el hash dels blobs Git que GitHub Raw servirà realment.
+        print("Hashes dels fitxers publicats:")
+        hashes = calcular_hashes_git(worktree, "HEAD", noms_fitxers)
+
+        # Publica l'HEAD temporal directament a origin/ota.
+        run(["git", "-C", str(worktree), "push", "origin", f"HEAD:{branca}"])
+        print(f"Branca '{branca}' publicada correctament.")
+        return hashes
+
+    finally:
+        # Elimina el worktree encara que algun pas falli.
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(worktree)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if worktree.exists():
+            shutil.rmtree(worktree, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -160,30 +230,20 @@ def on_connect(client, userdata, flags, rc, *extra):
         print(f"Error de connexió MQTT, codi: {rc}", file=sys.stderr)
 
 
-def on_message(client, userdata, msg):
-    if msg.payload == b"":
-        ack_rebut["valor"] = True
-        print("ACK rebut: el dispositiu ha processat l'ordre.")
-
-
-def publicar_ordre_ota(manifest: dict, host: str, port: int, token: str,
-                        topic: str, use_tls: bool, wait_ack: int):
+def publicar_ordre_ota(versio: str, fitxers: list, hashes: dict,
+                        host: str, port: int, token: str,
+                        topic: str, use_tls: bool):
     ordre = {
         "cmd": "ota",
-        "files": manifest["files"],
-        "hashes": manifest["hashes"],
-        "version": manifest["version"],
+        "files": fitxers,
+        "hashes": hashes,
+        "version": versio,
     }
 
-    print(f"\nVersió a publicar: {manifest['version']}")
-    print(f"Fitxers: {', '.join(manifest['files'])}")
+    print(f"\nVersió a publicar: {versio}")
+    print(f"Fitxers: {', '.join(fitxers)}")
     print(f"Topic: {topic}")
     print(f"Broker: {host}:{port} (TLS: {use_tls})\n")
-
-    confirmacio = input("Confirmes la publicació d'aquesta ordre OTA? [s/N] ")
-    if confirmacio.strip().lower() not in ("s", "si", "sí", "y", "yes"):
-        print("Cancel·lat.")
-        sys.exit(0)
 
     if hasattr(mqtt, "CallbackAPIVersion"):
         client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
@@ -196,33 +256,11 @@ def publicar_ordre_ota(manifest: dict, host: str, port: int, token: str,
         client.tls_set()
 
     client.on_connect = on_connect
-    client.on_message = on_message
-
     client.connect(host, port, keepalive=30)
-    client.subscribe(topic, qos=0)
     client.loop_start()
-
-    time.sleep(1)  # marge per completar la subscripció abans de publicar
 
     client.publish(topic, json.dumps(ordre), qos=0, retain=True)
     print("Ordre OTA publicada.")
-
-    if wait_ack > 0:
-        print(f"Esperant confirmació del dispositiu (fins a {wait_ack}s)...")
-        inici = time.time()
-
-        while time.time() - inici < wait_ack:
-            if ack_rebut["valor"]:
-                break
-            time.sleep(0.5)
-
-        if not ack_rebut["valor"]:
-            print(
-                "AVÍS: no s'ha rebut confirmació dins el temps d'espera. "
-                "El dispositiu pot estar en PSM/dormint; rebrà l'ordre "
-                "(retained) al proper cicle d'activitat.",
-                file=sys.stderr
-            )
 
     client.loop_stop()
     client.disconnect()
@@ -236,15 +274,13 @@ def main():
     parser = argparse.ArgumentParser(description="Desplega una nova versió OTA de cap a cap.")
     parser.add_argument("version", help="Número de versió a publicar (ex: 1.4.3)")
     parser.add_argument("--src-dir", default="src", help="Directori local amb el codi del dispositiu (per defecte: src)")
-    parser.add_argument("--files", nargs="+", default=["main.py", "config.py"],
-                         help="Fitxers a publicar per OTA (per defecte: main.py config.py)")
-    parser.add_argument("--manifest-out", default="ota/manifest.json",
-                         help="Ruta on desar el manifest (per defecte: ota/manifest.json)")
+    parser.add_argument("--files", nargs="+", default=["main.py"],
+                         help="Fitxers a publicar per OTA (per defecte: main.py)")
     parser.add_argument("--max-size-kb", type=int, default=100)
     parser.add_argument("--mqtt-port", type=int, default=8883, help="Port MQTT per publicar (per defecte: 8883, TLS)")
     parser.add_argument("--no-tls", action="store_true")
-    parser.add_argument("--wait-ack", type=int, default=20)
     parser.add_argument("--commit-msg", default=None)
+    parser.add_argument("--ota-branch", default="ota", help="Branca Git usada per OTA (per defecte: ota)")
     parser.add_argument("--skip-version", action="store_true")
     parser.add_argument("--skip-git", action="store_true")
     parser.add_argument("--skip-publish", action="store_true")
@@ -255,40 +291,38 @@ def main():
     config_path = src_dir / "config.py"
     device_path = src_dir / "device.py"
     secrets_path = src_dir / "secrets.py"
-    manifest_path = Path(args.manifest_out)
     commit_msg = args.commit_msg or f"OTA v{args.version}"
 
     print(f"=== Desplegament OTA v{args.version} ===\n")
 
     # 1. Versió
     if not args.skip_version:
-        print("-- Pas 1/4: actualitzar VERSIO --")
+        print("-- Pas 1/3: actualitzar VERSIO --")
         actualitzar_versio(main_path, args.version)
     else:
-        print("-- Pas 1/4: omès (--skip-version) --")
+        print("-- Pas 1/3: omès (--skip-version) --")
 
-    # 2. Manifest (llegeix els fitxers ja actualitzats, incloent el nou VERSIO)
-    print("\n-- Pas 2/4: generar manifest.json --")
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest = generar_manifest(src_dir, args.files, args.version, manifest_path, args.max_size_kb)
+    print("\n-- Preparar OTA --")
+    validar_fitxers_locals(src_dir, args.files, args.max_size_kb)
 
-    # 3. Git
+    # 2. Git: publicar només a la branca OTA
     if not args.skip_git:
-        print("\n-- Pas 3/4: git add / commit / push --")
-        run(["git", "add", "-A"])
-
-        codi = run(["git", "diff", "--cached", "--quiet"], check=False)
-        if codi == 0:
-            print("No hi ha canvis a committejar (working tree ja net).")
-        else:
-            run(["git", "commit", "-m", commit_msg])
-            run(["git", "push"])
+        print(f"\n-- Pas 2/3: publicar branca {args.ota_branch} --")
+        hashes = publicar_branca_ota(
+            src_dir=src_dir,
+            noms_fitxers=args.files,
+            commit_msg=commit_msg,
+            branca=args.ota_branch,
+        )
     else:
-        print("\n-- Pas 3/4: omès (--skip-git) --")
+        print("\n-- Pas 2/3: omès (--skip-git) --")
+        run(["git", "fetch", "origin"])
+        print(f"Hashes de origin/{args.ota_branch}:")
+        hashes = calcular_hashes_git(Path("."), f"origin/{args.ota_branch}", args.files)
 
     # 4. Publicar (llegeix config/secrets del dispositiu, no hi ha fitxer dedicat a mantenir)
     if not args.skip_publish:
-        print("\n-- Pas 4/4: publicar ordre OTA per MQTT --")
+        print("\n-- Pas 3/3: publicar ordre OTA per MQTT --")
 
         config_modul = carregar_modul(config_path, "device_config")
         device_modul = carregar_modul(device_path, "device_config_id")
@@ -310,17 +344,17 @@ def main():
             host = host.decode("utf-8")
 
         publicar_ordre_ota(
-            manifest=manifest,
+            versio=args.version,
+            fitxers=args.files,
+            hashes=hashes,
             host=host,
             port=args.mqtt_port,
             token=token,
             topic=topic,
             use_tls=not args.no_tls,
-            wait_ack=args.wait_ack,
         )
     else:
-        print("\n-- Pas 4/4: omès (--skip-publish) --")
-        print(f"Manifest llest a {manifest_path}.")
+        print("\n-- Pas 3/3: omès (--skip-publish) --")
 
     print(f"\n=== Desplegament v{args.version} completat ===")
 
