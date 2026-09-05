@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.41"
+VERSIO = "1.0.42"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -559,13 +559,21 @@ def main():
 
     # sincronitzacio NTP
     try:
+        debug("Sincronitzant NTP...")
         utime.setTimeZone(2)
-        ntp_ret = ntptime.settime(2, 1, 10)
+
+        debug(
+            "Hora actual:",
+            "%02d:%02d:%02d" % utime.localtime()[3:6],
+            "Timezone:",
+            utime.getTimeZone()
+        )
+
     except Exception as error:
         ntp_ret = None
         debug("Error NTP:", error)
-        guardar_error("NTP: error:", error)
-            
+        guardar_error("NTP: error:", error) 
+
     # Info fitxer XTRA
     if config.DEBUG:
         resposta = bytearray(100)
