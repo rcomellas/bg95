@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.42"
+VERSIO = "1.0.43"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -606,8 +606,10 @@ def main():
     
     # Tracking (si s'ha activat via ordre retained o rebuda ara)
     while tracking_actiu:
-        client, tracking_actiu = cicle_tracking(client)
+        client, continuar_tracking = cicle_tracking(client)
 
+    if not continuar_tracking:
+        break
         if fitxers_ota_pendents:
             return
 
