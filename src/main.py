@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.46"
+VERSIO = "1.0.47"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib, sys
@@ -11,6 +11,7 @@ from usr import secrets, config, device
 
 _thread.stack_size(16 * 1024)
 wdt = WDT(config.TEMPS_WATCHDOG)
+inici_programa = utime.ticks_ms()
 
 TOPIC_POSICIO = device.DEVICE_ID + config.TOPIC_POSICIO
 TOPIC_STATUS = device.DEVICE_ID + config.TOPIC_STATUS
@@ -40,8 +41,8 @@ def temps_transcorregut(inici):
 
 def debug(*args):
     if config.DEBUG:
-        print(*args)
-
+        segons = utime.ticks_diff(utime.ticks_ms(), inici_programa) // 1000
+        print("[%4ds]" % segons, *args)
 
 def guardar_error(*args):
     try:
