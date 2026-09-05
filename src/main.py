@@ -1,8 +1,8 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.48"
+VERSIO = "1.0.49"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
-import ntptime, uos, net, dataCall, ubinascii, uhashlib, sys
+import ntptime, uos, net, dataCall, ubinascii, uhashlib
 from misc import Power
 from umqtt import MQTTClient
 from machine import WDT
@@ -165,8 +165,11 @@ def obtenir_posicio():
 
 
 def _debug_cn0(dades, temps):
+    segons = utime.ticks_diff(utime.ticks_ms(), inici_programa) // 1000
+    print("[%4ds]" % segons, end=" ")
     print("Sense fix:", temps, "s", end=" ")
     cn0 = []
+
 
     for linia in dades.split("\r\n"):
         if "GSV" in linia:
@@ -564,7 +567,7 @@ def main():
     # sincronitzacio NTP
     try:
         debug("Sincronitzant NTP...")
-        ntp_ret = ntptime.settime(2, 1, 10)
+        ntp_ret = ntptime.settime(2, 0, 10)
         # utime.setTimeZone(2)
 
         debug(
@@ -683,6 +686,5 @@ try:
 except Exception as error:
     debug("Error fatal a main:", error)
     guardar_error("Main: error fatal:", error)
-    sys.print_exception(error)
     pm.autosleep(1)
     utime.sleep(120)
