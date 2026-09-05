@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.49"
+VERSIO = "1.0.50"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -563,6 +563,11 @@ def main():
 
     # Obtenir posició GNSS 
     posicio, gnss_time = obtenir_posicio()
+
+    try:
+        debug("NITZ:", net.nitzTime())
+    except Exception as error:
+        debug("Error NITZ:", error)
         
     # sincronitzacio NTP
     try:
