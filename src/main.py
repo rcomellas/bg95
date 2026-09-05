@@ -1,8 +1,8 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.44"
+VERSIO = "1.0.46"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
-import ntptime, uos, net, dataCall, ubinascii, uhashlib
+import ntptime, uos, net, dataCall, ubinascii, uhashlib, sys
 from misc import Power
 from umqtt import MQTTClient
 from machine import WDT
@@ -561,7 +561,7 @@ def main():
     try:
         debug("Sincronitzant NTP...")
         ntp_ret = ntptime.settime(2, 1, 10)
-        utime.setTimeZone(2)
+        # utime.setTimeZone(2)
 
         debug(
             "Hora actual:",
@@ -682,6 +682,6 @@ try:
 except Exception as error:
     debug("Error fatal a main:", error)
     guardar_error("Main: error fatal:", error)
-
+    sys.print_exception(error)
     pm.autosleep(1)
     utime.sleep(120)
