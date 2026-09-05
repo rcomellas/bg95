@@ -198,12 +198,18 @@ def publicar_branca_ota(src_dir: Path, noms_fitxers: list,
         else:
             print("La branca OTA ja conté exactament aquests fitxers.")
 
-        # Calcula el hash dels blobs Git que GitHub Raw servirà realment.
-        print("Hashes dels fitxers publicats:")
-        hashes = calcular_hashes_git(worktree, "HEAD", noms_fitxers)
-
         # Publica l'HEAD temporal directament a origin/ota.
         run(["git", "-C", str(worktree), "push", "origin", f"HEAD:{branca}"])
+
+        # Torna a llegir exactament el que ha quedat publicat al remot.
+        run(["git", "-C", str(worktree), "fetch", "origin"])
+        print("Hashes dels fitxers publicats:")
+        hashes = calcular_hashes_git(
+            worktree,
+            f"origin/{branca}",
+            noms_fitxers,
+        )
+
         print(f"Branca '{branca}' publicada correctament.")
         return hashes
 
