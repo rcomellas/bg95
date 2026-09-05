@@ -608,8 +608,8 @@ def main():
     while tracking_actiu:
         client, continuar_tracking = cicle_tracking(client)
 
-    if not continuar_tracking:
-        break
+        if not continuar_tracking:
+            break
         if fitxers_ota_pendents:
             return
 
