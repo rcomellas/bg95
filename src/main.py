@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.47"
+VERSIO = "1.0.48"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib, sys
@@ -558,6 +558,9 @@ def main():
 
     debug("Xarxa connectada")
 
+    # Obtenir posició GNSS 
+    posicio, gnss_time = obtenir_posicio()
+        
     # sincronitzacio NTP
     try:
         debug("Sincronitzant NTP...")
@@ -583,9 +586,6 @@ def main():
         text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "").strip()
         debug("XTRA info:", text)
 
-    # Obtenir posició GNSS 
-    posicio, gnss_time = obtenir_posicio()
-        
     # Connectar MQTT i publicar primera posició
     try:
         debug("Connectant mqtt...")
