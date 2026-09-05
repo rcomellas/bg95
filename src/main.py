@@ -369,25 +369,14 @@ def processar_ordre(topic, missatge):
             ordre_rebuda = True
 
         elif cmd == "track_start":
-            try:
-                interval = int(ordre.get("interval", config.TRACKING_INTERVAL_DEFECTE))
-            except (TypeError, ValueError):
-                interval = config.TRACKING_INTERVAL_DEFECTE
-
-            nou_interval = max(
-                config.TRACKING_INTERVAL_MIN,
-                min(interval, config.TRACKING_INTERVAL_MAX)
+            tracking_interval = int(
+                ordre.get("interval", config.TRACKING_INTERVAL_DEFECTE)
+            )
+            tracking_max = int(
+                ordre.get("max", config.TRACKING_MAX_DEFECTE)
             )
 
-            try:
-                nou_max = int(ordre.get("max", config.TRACKING_MAX_DEFECTE))
-            except (TypeError, ValueError):
-                nou_max = config.TRACKING_MAX_DEFECTE
-            nou_max = max(0, nou_max)
-
             with lock_tracking:
-                tracking_interval = nou_interval
-                tracking_max = nou_max
                 tracking_inici = utime.ticks_ms()
                 tracking_actiu = True
 
@@ -396,7 +385,9 @@ def processar_ordre(topic, missatge):
         elif cmd == "track_stop":
             with lock_tracking:
                 tracking_actiu = False
+
             ordre_rebuda = True
+        
 
     except Exception as error:
         debug("Error processant ordre MQTT:", error)
@@ -480,66 +471,55 @@ def executar_ota(fitxers, hashes, client):
 # ---------------------------------------------------------------------------
 
 def cicle_tracking(client):
-    """Un cicle de tracking: espera l'interval (MQTT desconnectat, sense
-    contenció de ràdio), fa un fix, reconnecta MQTT (rep ordres retained
-    pendents com track_stop/ota) i publica. Retorna el client (nou) i
-    si cal seguir fent tracking."""
     global tracking_actiu
-    with lock_tracking:
-        interval_actual = tracking_interval
-        max_actual = tracking_max
-        inici_actual = tracking_inici
 
-    debug("Tracking actiu. Interval:", interval_actual)
-
-    if temps_transcorregut(inici_actual) >= max_actual:
+    # Abans d'esperar, mirar si encara hi cap un altre interval
+    if temps_transcorregut(tracking_inici) + tracking_interval > tracking_max:
         debug("Final tracking: temps màxim")
-        with lock_tracking:
-            tracking_actiu = False
+        tracking_actiu = False
         return client, False
 
+    debug("Tracking: espero", tracking_interval, "segons")
+
+    # Durant l'espera no necessitem MQTT
     desconnectar_mqtt(client)
 
-    debug("Tracking: espero", interval_actual, "segons (MQTT desconnectat)")
     pm.autosleep(1)
-    utime.sleep(interval_actual)
+    utime.sleep(tracking_interval)
     pm.autosleep(0)
 
-    with lock_tracking:
-        actiu_actual = tracking_actiu
-        max_actual = tracking_max
-        inici_actual = tracking_inici
-
-    if not actiu_actual:
-        debug("Final tracking: track_stop mentre esperava")
-        return client, False
-
-    if temps_transcorregut(inici_actual) >= max_actual:
-        debug("Final tracking: temps màxim")
-        with lock_tracking:
-            tracking_actiu = False
-        return client, False
-
-    posicio, gnss_time = obtenir_posicio()
-
+    # Reconnectar MQTT ABANS del següent fix.
+    # Així podem recollir un track_stop retained.
     try:
         client, _ = connectar_mqtt()
     except Exception as error:
-        debug("MQTT no disponible aquest cicle, continuo tracking:", error)
+        debug("MQTT no disponible aquest cicle:", error)
         return client, True
 
-    if fitxers_ota_pendents:
-        executar_ota(fitxers_ota_pendents, hashes_ota_pendents, client)
+    # Donar temps al thread MQTT per processar l'ordre retained
+    utime.sleep(1)
+
+    # Si durant l'espera ens han enviat STOP, no fem cap altre fix
+    if not tracking_actiu:
+        debug("Final tracking: track_stop")
         return client, False
+
+    # OTA pendent
+    if fitxers_ota_pendents:
+        executar_ota(
+            fitxers_ota_pendents,
+            hashes_ota_pendents,
+            client
+        )
+        return client, False
+
+    # Nou punt de tracking
+    posicio, gnss_time = obtenir_posicio()
 
     publicar_posicio_segura(client, posicio)
     debug("Tracking GNSS:", gnss_time, "s")
 
-    with lock_tracking:
-        actiu_actual = tracking_actiu
-
-    return client, actiu_actual
-
+    return client, True
 
 # ---------------------------------------------------------------------------
 # main
