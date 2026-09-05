@@ -571,7 +571,9 @@ def main():
         debug("Error NITZ:", error)
 
     # sincronitzacio NTP
+    temps_NTP, ntp_ret = None, None
     try:
+        inici = utime.ticks_ms()
         ntptime.sethost("pool.ntp.org")
 
         ntp_ret = ntptime.settime(2, 0, 3)
@@ -584,9 +586,11 @@ def main():
             "Timezone:",
             utime.getTimeZone()
         )
+        
+        temps_NTP = temps_transcorregut(inici)
+        debug("Temps obtenció NTP:", temps_NTP, "segons")
 
     except Exception as error:
-        ntp_ret = None
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
         
@@ -671,6 +675,7 @@ def main():
         "rsrp": rsrp,
         "rsrq": rsrq,
         "ntp_ret": ntp_ret,
+        "temps_ntp": temps_NTP,
         "timezone": utime.getTimeZone(),
         "hora": "%02d:%02d:%02d" % utime.localtime()[3:6]
     }
