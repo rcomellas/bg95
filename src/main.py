@@ -526,6 +526,12 @@ def main():
         return
 
     debug("Xarxa connectada")
+    debug(
+        "Hora abans GNSS:",
+        "%02d:%02d:%02d" % utime.localtime()[3:6],
+        "Timezone:",
+        utime.getTimeZone()
+    )
 
     # Obtenir posició GNSS 
     posicio, gnss_time = obtenir_posicio()
