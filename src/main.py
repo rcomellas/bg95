@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.50"
+VERSIO = "1.0.52"
 
 import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib, uselect
@@ -93,6 +93,10 @@ def obtenir_posicio():
     llegeix trames NMEA fins trobar fix o esgotar TEMPS_MAXIM_FIX,
     i la retorna a prioritat LTE en acabar (amb fix o sense).
     Retorna (posicio, gnss_time), on posicio és None si no hi ha fix."""
+
+    global hora_gnss
+    hora_gnss = None
+
     if quecgnss.init() != 0:
         debug("Error inicialitzant GNSS")
         guardar_error("GNSS: error inicialitzant")
@@ -138,6 +142,7 @@ def obtenir_posicio():
                     longitud = convertir_coordenada(rmc[5], rmc[6], 3)
                     satel_lits = int(gga[7]) if gga and gga[7] else 0
                     posicio = (latitud, longitud, satel_lits)
+                    hora_gnss = rmc[1].split(".")[0]
                     break
 
                 if config.DEBUG:
@@ -639,17 +644,18 @@ def main():
         "tau_req": tau_demanat,
         "tau_net": tau_net,
         "proper": proper,
-        "active_time": active_time,
+        # "active_time": active_time,
         "net_time": net_time,
         "gnss_time": gnss_time,
         "mqtt_time": mqtt_time,
         "fix": posicio is not None,
         "rsrp": rsrp,
         "rsrq": rsrq,
-        "ntp_ret": ntp_ret,
-        "temps_ntp": temps_NTP,
+        # "ntp_ret": ntp_ret,
+        # "temps_ntp": temps_NTP,
         "timezone": utime.getTimeZone(),
-        "hora": "%02d:%02d:%02d" % utime.localtime()[3:6]
+        "hora": "%02d:%02d:%02d" % utime.localtime()[3:6],
+        "hora_gnss": hora_gnss
     }
     try:
         utime.sleep(1)
