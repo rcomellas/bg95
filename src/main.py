@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.38"
+VERSIO = "1.0.28"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -96,6 +96,10 @@ def obtenir_posicio():
     llegeix trames NMEA fins trobar fix o esgotar TEMPS_MAXIM_FIX,
     i la retorna a prioritat LTE en acabar (amb fix o sense).
     Retorna (posicio, gnss_time), on posicio és None si no hi ha fix."""
+
+    global hora_gnss
+    hora_gnss = None
+
     if quecgnss.init() != 0:
         debug("Error inicialitzant GNSS")
         guardar_error("GNSS: error inicialitzant")
@@ -137,6 +141,7 @@ def obtenir_posicio():
                             gga = camps
 
                 if rmc:
+                    hora_gnss = rmc[1]
                     latitud = convertir_coordenada(rmc[3], rmc[4], 2)
                     longitud = convertir_coordenada(rmc[5], rmc[6], 3)
                     satel_lits = int(gga[7]) if gga and gga[7] else 0
@@ -567,7 +572,7 @@ def main():
     # debug("DESPRES CHECKNET:", stage, state, "net_time:", net_time)
     # debug("NET STATE POST:", net.getState())
     # debug("DATACALL POST:", dataCall.getInfo(1, 0))
-
+    
     if stage != 3 or state != 1:
         guardar_error("Xarxa: error connexio:", stage, state)
         debug("Xarxa: error connexio:", stage, state)
@@ -579,7 +584,9 @@ def main():
 
     # sincronitzacio NTP
     try:
-        ntp_ret = ntptime.settime(2, 1, 10)
+        ntp_ret = ntptime.settime(2)
+        debug("NTP ret:", ntp_ret)
+        debug("Hora després NTP:", utime.localtime())
     except Exception as error:
         ntp_ret = None
         debug("Error NTP:", error)
@@ -668,7 +675,8 @@ def main():
         "rsrq": rsrq,
         "ntp_ret": ntp_ret,
         "timezone": utime.getTimeZone(),
-        "hora": "%02d:%02d:%02d" % utime.localtime()[3:6]
+        "hora": "%02d:%02d:%02d" % utime.localtime()[3:6],
+        "hora_gnss": hora_gnss
     }
     try:
         client.publish(TOPIC_STATUS, ujson.dumps(status), True, 1)

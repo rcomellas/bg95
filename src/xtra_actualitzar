@@ -1,0 +1,76 @@
+import atcmd
+import utime
+
+
+def enviar_at(comanda, timeout=10):
+    resposta = bytearray(300)
+
+    ret = atcmd.sendSync(
+        comanda + "\r\n",
+        resposta,
+        "",
+        timeout
+    )
+
+    text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "")
+
+    print(">", comanda)
+    print(text)
+
+    return ret, text
+
+
+def hores_xtra_restants():
+    ret, text = enviar_at('AT+QGPSCFG="xtra_info"', 5)
+
+    if '+QGPSCFG: "xtra_info",' not in text:
+        print("No es pot obtenir informació XTRA")
+        return None
+
+    try:
+        part = text.split('+QGPSCFG: "xtra_info",')[1]
+        hores = int(part.split(",")[0])
+        return hores
+
+    except:
+        return None
+
+
+def comprovar_xtra():
+    hores = hores_xtra_restants()
+
+    if hores is None:
+        print("XTRA no disponible")
+        return False
+
+    print("XTRA restant:", hores, "hores")
+
+    if hores > 0:
+        print("XTRA vigent")
+        return True
+
+    print("XTRA caducat. Forçant actualització...")
+
+    ret, text = enviar_at(
+        'AT+QGPSCFG="xtra_download",1',
+        40
+    )
+
+    if ret != 0:
+        print("No s'ha pogut iniciar la descàrrega XTRA")
+        return False
+
+    # La descàrrega pot tardar fins a 35 s
+    utime.sleep(35)
+
+    hores = hores_xtra_restants()
+
+    if hores is not None and hores > 0:
+        print("XTRA actualitzat:", hores, "hores")
+        return True
+
+    print("XTRA no actualitzat")
+    return False
+
+
+comprovar_xtra()
