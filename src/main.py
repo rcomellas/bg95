@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.51"
+VERSIO = "1.0.52"
 
 import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib
@@ -567,8 +567,7 @@ def main():
     debug("Xarxa connectada")
 
     # Obtenir posició GNSS 
-    # posicio, gnss_time = obtenir_posicio()
-    posicio, gnss_time = (42, 2, 3), 3
+    posicio, gnss_time = obtenir_posicio()
 
     try:
         debug("Hora NITZ:", net.nitzTime())
