@@ -37,7 +37,7 @@ BASE_URL_OTA = "https://raw.githubusercontent.com/rcomellas/bg95/ota/src/"
 
 # LOG ERRORS
 FITXER_LOG = "/usr/bg95.error.log"
-TOPIC_LOG = b"bg95/log"
+TOPIC_LOG = b"/log"
 
 # ALTRES
 TEMPS_WATCHDOG = 120
