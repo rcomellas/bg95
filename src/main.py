@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.57"
+VERSIO = "1.0.58"
 
 import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib, uselect
@@ -602,7 +602,7 @@ def main():
 
     resposta = bytearray(100)
     atcmd.sendSync("AT+QTEMP\r\n", resposta, "", 10)
-    temperatura = max(map(int, bytes(resposta).decode().split("+QTEMP:")[1].split("\r")[0].split(",")))
+    temperatura = int(bytes(resposta).decode().split("+QTEMP:")[1].split(",")[0])
 
     # Negociació PSM
     tau_demanat = calcular_tau_a_demanar()
