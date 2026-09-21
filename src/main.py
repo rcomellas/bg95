@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.52"
+VERSIO = "1.0.55"
 
 import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib, uselect
@@ -142,7 +142,12 @@ def obtenir_posicio():
                     longitud = convertir_coordenada(rmc[5], rmc[6], 3)
                     satel_lits = int(gga[7]) if gga and gga[7] else 0
                     posicio = (latitud, longitud, satel_lits)
-                    hora_gnss = rmc[1].split(".")[0]
+
+                    hora = rmc[1]
+                    data = rmc[9]
+                    hora_gnss = "%s:%s:%s" % (hora[0:2], hora[2:4], hora[4:6])
+                    utime.setlocaltime((2000 + int(data[4:6]), int(data[2:4]), int(data[0:2]), int(hora[0:2]), int(hora[2:4]), int(hora[4:6]), 0, 0))
+
                     break
 
                 if config.DEBUG:
@@ -519,9 +524,6 @@ def main():
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
     wdt.feed()
-    # debug("DESPRES CHECKNET:", stage, state, "net_time:", net_time)
-    # debug("NET STATE POST:", net.getState())
-    # debug("DATACALL POST:", dataCall.getInfo(1, 0))
 
     if stage != 3 or state != 1:
         guardar_error("Xarxa: error connexio:", stage, state)
@@ -531,32 +533,17 @@ def main():
         return
 
     debug("Xarxa connectada")
-    debug(
-        "Hora abans GNSS:",
-        "%02d:%02d:%02d" % utime.localtime()[3:6],
-        "Timezone:",
-        utime.getTimeZone()
-    )
-
+    
     # Obtenir posició GNSS 
     posicio, gnss_time = obtenir_posicio()
-    # posicio, gnss_time = (42, 2, 3), 3
-
-    try:
-        debug("Hora NITZ:", net.nitzTime())
-    except Exception as error:
-        debug("Error NITZ:", error)
-
+    
     # sincronitzacio NTP
-    temps_NTP, ntp_ret = None, None
     try:
         inici = utime.ticks_ms()
         ntptime.sethost("pool.ntp.org")
-
-        ntp_ret = ntptime.settime(2, 0, 3)
-        # ntp_ret = ntptime.settime(2, 0, 10)
-        # utime.setTimeZone(2)
-
+        if hora_gnss is None:
+            ntp_ret = ntptime.settime(2, 0, 10)
+        
         debug(
             "Hora NTP:",
             "%02d:%02d:%02d" % utime.localtime()[3:6],
