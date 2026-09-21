@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.55"
+VERSIO = "1.0.56"
 
 import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib, uselect
@@ -667,4 +667,4 @@ except Exception as error:
     debug("Error fatal a main:", error)
     guardar_error("Main: error fatal:", error)
     pm.autosleep(1)
-    utime.sleep(120)
+    utime.sleep(120)    
