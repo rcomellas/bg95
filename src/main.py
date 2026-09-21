@@ -1,5 +1,5 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.56"
+VERSIO = "1.0.57"
 
 import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
 import ntptime, uos, net, dataCall, ubinascii, uhashlib, uselect
@@ -600,6 +600,10 @@ def main():
     publicar_log(client)
     rsrp, rsrq = obtenir_senyal()
 
+    resposta = bytearray(100)
+    atcmd.sendSync("AT+QTEMP\r\n", resposta, "", 10)
+    temperatura = max(map(int, bytes(resposta).decode().split("+QTEMP:")[1].split("\r")[0].split(",")))
+
     # Negociació PSM
     tau_demanat = calcular_tau_a_demanar()
 
@@ -642,7 +646,8 @@ def main():
         # "temps_ntp": temps_NTP,
         "timezone": utime.getTimeZone(),
         "hora": "%02d:%02d:%02d" % utime.localtime()[3:6],
-        "hora_gnss": hora_gnss
+        "hora_gnss": hora_gnss,
+        "temp": temperatura
     }
     try:
         utime.sleep(1)
