@@ -1,23 +1,21 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.28"
+VERSIO = "1.0.55"
 
-import utime, ujson, quecgnss, pm, checkNet, _thread, atcmd, app_fota
-import ntptime, uos, net, dataCall, ubinascii, uhashlib
+import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
+import ntptime, uos, net, dataCall, ubinascii, uhashlib, uselect
 from misc import Power
 from umqtt import MQTTClient
 from machine import WDT
 from usr import secrets, config, device
 
 
-_thread.stack_size(16 * 1024)
 wdt = WDT(config.TEMPS_WATCHDOG)
+inici_programa = utime.ticks_ms()
 
 TOPIC_POSICIO = device.DEVICE_ID + config.TOPIC_POSICIO
 TOPIC_STATUS = device.DEVICE_ID + config.TOPIC_STATUS
 TOPIC_ORDRES = device.DEVICE_ID + config.TOPIC_ORDRES
 TOPIC_LOG = device.DEVICE_ID + config.TOPIC_LOG
-
-mqtt_escolta_activa = False
 
 fitxers_ota_pendents = None
 hashes_ota_pendents = None
@@ -27,7 +25,6 @@ tracking_actiu = False
 tracking_interval = config.TRACKING_INTERVAL_DEFECTE
 tracking_max = config.TRACKING_MAX_DEFECTE
 tracking_inici = None
-lock_tracking = _thread.allocate_lock()
 
 
 # ---------------------------------------------------------------------------
@@ -40,8 +37,8 @@ def temps_transcorregut(inici):
 
 def debug(*args):
     if config.DEBUG:
-        print(*args)
-
+        segons = utime.ticks_diff(utime.ticks_ms(), inici_programa) // 1000
+        print("[%4ds]" % segons, *args)
 
 def guardar_error(*args):
     try:
@@ -146,6 +143,12 @@ def obtenir_posicio():
                     longitud = convertir_coordenada(rmc[5], rmc[6], 3)
                     satel_lits = int(gga[7]) if gga and gga[7] else 0
                     posicio = (latitud, longitud, satel_lits)
+
+                    hora = rmc[1]
+                    data = rmc[9]
+                    hora_gnss = "%s:%s:%s" % (hora[0:2], hora[2:4], hora[4:6])
+                    utime.setlocaltime((2000 + int(data[4:6]), int(data[2:4]), int(data[0:2]), int(hora[0:2]), int(hora[2:4]), int(hora[4:6]), 0, 0))
+
                     break
 
                 if config.DEBUG:
@@ -158,6 +161,7 @@ def obtenir_posicio():
         # quecgnss.gnssEnable(0)
         # quecgnss.setPriority(1)
         wdt.feed()
+        
 
         debug("Posició obtinguda en", gnss_time, "segons:", posicio)
 
@@ -169,8 +173,11 @@ def obtenir_posicio():
 
 
 def _debug_cn0(dades, temps):
+    segons = utime.ticks_diff(utime.ticks_ms(), inici_programa) // 1000
+    print("[%4ds]" % segons, end=" ")
     print("Sense fix:", temps, "s", end=" ")
     cn0 = []
+
 
     for linia in dades.split("\r\n"):
         if "GSV" in linia:
@@ -235,9 +242,8 @@ def obtenir_psm_negociat():
 # ---------------------------------------------------------------------------
 
 def connectar_mqtt(intents=3):
-    """Connecta, subscriu (rep qualsevol ordre retained pendent) i llança
-    el fil d'escolta. Reintenta amb backoff si falla."""
-    global mqtt_escolta_activa
+    """Connecta i subscriu al tòpic d'ordres.
+       Reintenta amb backoff si falla."""
 
     inici = utime.ticks_ms()
     ultim_error = None
@@ -259,9 +265,6 @@ def connectar_mqtt(intents=3):
             client.connect()
             client.subscribe(TOPIC_ORDRES, 0)
 
-            mqtt_escolta_activa = True
-            _thread.start_new_thread(escoltar_mqtt, (client,))
-
             mqtt_time = temps_transcorregut(inici)
             return client, mqtt_time
 
@@ -277,10 +280,6 @@ def connectar_mqtt(intents=3):
 
 
 def desconnectar_mqtt(client):
-    global mqtt_escolta_activa
-
-    mqtt_escolta_activa = False
-
     try:
         client.disconnect()
     except Exception as error:
@@ -290,40 +289,26 @@ def desconnectar_mqtt(client):
 
 def escoltar_mqtt(client):
     global ordre_rebuda
-    global mqtt_escolta_activa
 
-    errors_consecutius = 0
-    max_errors = 3
+    try:
+        p = uselect.poll()  
+        p.register(client.sock, uselect.POLLIN)
 
-    while mqtt_escolta_activa:
-        try:
+        if p.poll(0):
             client.wait_msg()
-            errors_consecutius = 0
+        if ordre_rebuda:
+            client.publish(TOPIC_ORDRES, b"", True)
 
-            if ordre_rebuda:
-                client.publish(TOPIC_ORDRES, b"", True)
-                ordre_rebuda = False
+            if p.poll(1000):
+                client.wait_msg()
 
-                if fitxers_ota_pendents:
-                    break
+            ordre_rebuda = False
+            if fitxers_ota_pendents:
+                return
 
-        except Exception as error:
-            if not mqtt_escolta_activa:
-                break
-
-            errors_consecutius += 1
-            debug("escoltar_mqtt error:", error, "(", errors_consecutius, "/", max_errors, ")")
-            guardar_error("MQTT: error escolta:", error)
-
-            if errors_consecutius >= max_errors:
-                debug("escoltar_mqtt aturat")
-                guardar_error("MQTT: escolta aturada")
-                mqtt_escolta_activa = False
-                break
-
-            utime.sleep(1)
-
-    debug("mqtt_escolta_activa:", mqtt_escolta_activa)
+    except Exception as error:
+        debug("escoltar_mqtt error:", error)
+        guardar_error("MQTT: error escolta:", error)
 
 
 def publicar_posicio_segura(client, posicio):
@@ -374,34 +359,23 @@ def processar_ordre(topic, missatge):
             ordre_rebuda = True
 
         elif cmd == "track_start":
-            try:
-                interval = int(ordre.get("interval", config.TRACKING_INTERVAL_DEFECTE))
-            except (TypeError, ValueError):
-                interval = config.TRACKING_INTERVAL_DEFECTE
-
-            nou_interval = max(
-                config.TRACKING_INTERVAL_MIN,
-                min(interval, config.TRACKING_INTERVAL_MAX)
+            tracking_interval = int(
+                ordre.get("interval", config.TRACKING_INTERVAL_DEFECTE)
+            )
+            tracking_max = int(
+                ordre.get("max", config.TRACKING_MAX_DEFECTE)
             )
 
-            try:
-                nou_max = int(ordre.get("max", config.TRACKING_MAX_DEFECTE))
-            except (TypeError, ValueError):
-                nou_max = config.TRACKING_MAX_DEFECTE
-            nou_max = max(0, nou_max)
-
-            with lock_tracking:
-                tracking_interval = nou_interval
-                tracking_max = nou_max
-                tracking_inici = utime.ticks_ms()
-                tracking_actiu = True
+            tracking_inici = utime.ticks_ms()
+            tracking_actiu = True
 
             ordre_rebuda = True
 
         elif cmd == "track_stop":
-            with lock_tracking:
-                tracking_actiu = False
+            tracking_actiu = False
+
             ordre_rebuda = True
+        
 
     except Exception as error:
         debug("Error processant ordre MQTT:", error)
@@ -485,66 +459,48 @@ def executar_ota(fitxers, hashes, client):
 # ---------------------------------------------------------------------------
 
 def cicle_tracking(client):
-    """Un cicle de tracking: espera l'interval (MQTT desconnectat, sense
-    contenció de ràdio), fa un fix, reconnecta MQTT (rep ordres retained
-    pendents com track_stop/ota) i publica. Retorna el client (nou) i
-    si cal seguir fent tracking."""
     global tracking_actiu
-    with lock_tracking:
-        interval_actual = tracking_interval
-        max_actual = tracking_max
-        inici_actual = tracking_inici
 
-    debug("Tracking actiu. Interval:", interval_actual)
-
-    if temps_transcorregut(inici_actual) >= max_actual:
+    # Abans d'esperar, mirar si encara hi cap un altre interval
+    if temps_transcorregut(tracking_inici) + tracking_interval > tracking_max:
         debug("Final tracking: temps màxim")
-        with lock_tracking:
-            tracking_actiu = False
+        tracking_actiu = False
         return client, False
 
-    desconnectar_mqtt(client)
+    debug("Tracking: espero", tracking_interval, "segons")
 
-    debug("Tracking: espero", interval_actual, "segons (MQTT desconnectat)")
-    pm.autosleep(1)
-    utime.sleep(interval_actual)
-    pm.autosleep(0)
+    inici_espera = utime.ticks_ms()
 
-    with lock_tracking:
-        actiu_actual = tracking_actiu
-        max_actual = tracking_max
-        inici_actual = tracking_inici
+    while temps_transcorregut(inici_espera) < tracking_interval:
+        escoltar_mqtt(client)
+        wdt.feed()
 
-    if not actiu_actual:
-        debug("Final tracking: track_stop mentre esperava")
+        if not tracking_actiu or fitxers_ota_pendents:
+            break
+
+        utime.sleep(3)
+
+    # Si durant l'espera ens han enviat STOP, no fem cap altre fix
+    if not tracking_actiu:
+        debug("Final tracking: track_stop")
         return client, False
 
-    if temps_transcorregut(inici_actual) >= max_actual:
-        debug("Final tracking: temps màxim")
-        with lock_tracking:
-            tracking_actiu = False
-        return client, False
-
-    posicio, gnss_time = obtenir_posicio()
-
-    try:
-        client, _ = connectar_mqtt()
-    except Exception as error:
-        debug("MQTT no disponible aquest cicle, continuo tracking:", error)
-        return client, True
-
+    # OTA pendent
     if fitxers_ota_pendents:
-        executar_ota(fitxers_ota_pendents, hashes_ota_pendents, client)
+        executar_ota(
+            fitxers_ota_pendents,
+            hashes_ota_pendents,
+            client
+        )
         return client, False
+
+    # Nou punt de tracking
+    posicio, gnss_time = obtenir_posicio()
 
     publicar_posicio_segura(client, posicio)
     debug("Tracking GNSS:", gnss_time, "s")
 
-    with lock_tracking:
-        actiu_actual = tracking_actiu
-
-    return client, actiu_actual
-
+    return client, True
 
 # ---------------------------------------------------------------------------
 # main
@@ -569,10 +525,7 @@ def main():
     stage, state = checkNet.waitNetworkReady(30)
     net_time = temps_transcorregut(inici)
     wdt.feed()
-    # debug("DESPRES CHECKNET:", stage, state, "net_time:", net_time)
-    # debug("NET STATE POST:", net.getState())
-    # debug("DATACALL POST:", dataCall.getInfo(1, 0))
-    
+
     if stage != 3 or state != 1:
         guardar_error("Xarxa: error connexio:", stage, state)
         debug("Xarxa: error connexio:", stage, state)
@@ -581,17 +534,31 @@ def main():
         return
 
     debug("Xarxa connectada")
-
+    
+    # Obtenir posició GNSS 
+    posicio, gnss_time = obtenir_posicio()
+    
     # sincronitzacio NTP
     try:
-        ntp_ret = ntptime.settime(2)
-        debug("NTP ret:", ntp_ret)
-        debug("Hora després NTP:", utime.localtime())
+        inici = utime.ticks_ms()
+        ntptime.sethost("pool.ntp.org")
+        if hora_gnss is None:
+            ntp_ret = ntptime.settime(2, 0, 10)
+        
+        debug(
+            "Hora NTP:",
+            "%02d:%02d:%02d" % utime.localtime()[3:6],
+            "Timezone:",
+            utime.getTimeZone()
+        )
+        
+        temps_NTP = temps_transcorregut(inici)
+        debug("Temps obtenció NTP:", temps_NTP, "segons")
+
     except Exception as error:
-        ntp_ret = None
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
-            
+        
     # Info fitxer XTRA
     if config.DEBUG:
         resposta = bytearray(100)
@@ -599,13 +566,12 @@ def main():
         text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "").strip()
         debug("XTRA info:", text)
 
-    # Obtenir posició GNSS 
-    posicio, gnss_time = obtenir_posicio()
-        
     # Connectar MQTT i publicar primera posició
     try:
         debug("Connectant mqtt...")
         client, mqtt_time = connectar_mqtt()
+        utime.sleep(1)
+        escoltar_mqtt(client)
     except Exception as error:
         debug("Error connectant MQTT:", error)
         guardar_error("MQTT: error connexio:", error)
@@ -614,7 +580,6 @@ def main():
         # utime.sleep(120)
         return
 
-    utime.sleep(1)
     debug("MQTT connectat")
     if fitxers_ota_pendents:
         executar_ota(fitxers_ota_pendents, hashes_ota_pendents, client)
@@ -624,13 +589,14 @@ def main():
     
     # Tracking (si s'ha activat via ordre retained o rebuda ara)
     while tracking_actiu:
-        client, tracking_actiu = cicle_tracking(client)
+        client, continuar_tracking = cicle_tracking(client)
 
+        if not continuar_tracking:
+            break
         if fitxers_ota_pendents:
             return
 
-    with lock_tracking:
-        tracking_inici = None
+    tracking_inici = None
 
     publicar_log(client)
     rsrp, rsrq = obtenir_senyal()
@@ -666,21 +632,24 @@ def main():
         "tau_req": tau_demanat,
         "tau_net": tau_net,
         "proper": proper,
-        "active_time": active_time,
+        # "active_time": active_time,
         "net_time": net_time,
         "gnss_time": gnss_time,
         "mqtt_time": mqtt_time,
         "fix": posicio is not None,
         "rsrp": rsrp,
         "rsrq": rsrq,
-        "ntp_ret": ntp_ret,
+        # "ntp_ret": ntp_ret,
+        # "temps_ntp": temps_NTP,
         "timezone": utime.getTimeZone(),
         "hora": "%02d:%02d:%02d" % utime.localtime()[3:6],
         "hora_gnss": hora_gnss
     }
     try:
-        client.publish(TOPIC_STATUS, ujson.dumps(status), True, 1)
-        debug("Status publicat i confirmat pel broker:", status)
+        utime.sleep(1)
+        ret = client.publish(TOPIC_STATUS, ujson.dumps(status), True, 1)
+        debug("Retorn publish status:", ret)
+        debug("Status publicat:", status)
         utime.sleep(2)
     except Exception as error:
         debug("Error publicant status:", error)
@@ -698,6 +667,5 @@ try:
 except Exception as error:
     debug("Error fatal a main:", error)
     guardar_error("Main: error fatal:", error)
-
     pm.autosleep(1)
     utime.sleep(120)
