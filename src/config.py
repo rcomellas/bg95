@@ -22,7 +22,7 @@ TEMPS_MAXIM_FIX = 100  # segons
 # PSM
 TAU_CURT = 1800  # en segons
 TAU_LLARG = 1800  # en segons
-ACTIVE_TIME = 1  # en segons
+ACTIVE_TIME = 11 # en segons
 HORA_INICI_TAU_LLARG = 0
 HORA_FINAL_TAU_LLARG = 7
 
