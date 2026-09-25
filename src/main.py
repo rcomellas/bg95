@@ -5,7 +5,7 @@ import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
 import ntptime, uos, ubinascii, uhashlib, uselect
 from misc import Power
 from umqtt import MQTTClient
-from machine import WDT
+from machine import WDT, RTC
 from usr import secrets, config, device
 
 
@@ -104,6 +104,13 @@ def obtenir_posicio():
 
     quecgnss.setPriority(0)
     quecgnss.gnssEnable(1)
+    
+    # Info fitxer XTRA
+    if config.DEBUG:
+        resposta = bytearray(100)
+        atcmd.sendSync('AT+QGPSCFG="xtra_info"\r\n', resposta, "", 5)
+        text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "").strip()
+        debug("XTRA info:", text)
 
     try:
         debug("TEMPS_MAXIM_FIX:", config.TEMPS_MAXIM_FIX)
@@ -138,6 +145,7 @@ def obtenir_posicio():
                             gga = camps
 
                 if rmc:
+                    hora_gnss = rmc[1]
                     latitud = convertir_coordenada(rmc[3], rmc[4], 2)
                     longitud = convertir_coordenada(rmc[5], rmc[6], 3)
                     satel_lits = int(gga[7]) if gga and gga[7] else 0
@@ -146,8 +154,7 @@ def obtenir_posicio():
                     hora = rmc[1]
                     data = rmc[9]
                     hora_gnss = "%s:%s:%s" % (hora[0:2], hora[2:4], hora[4:6])
-                    utime.setlocaltime((2000 + int(data[4:6]), int(data[2:4]), int(data[0:2]), int(hora[0:2]), int(hora[2:4]), int(hora[4:6]), 0, 0))
-
+                    RTC().datetime([2000 + int(data[4:6]), int(data[2:4]), int(data[0:2]), 0, int(hora[0:2]), int(hora[2:4]), int(hora[4:6]), 0])
                     break
 
                 if config.DEBUG:
@@ -552,12 +559,7 @@ def main():
         debug("Error NTP:", error)
         guardar_error("NTP: error:", error)
         
-    # Info fitxer XTRA
-    if config.DEBUG:
-        resposta = bytearray(100)
-        atcmd.sendSync('AT+QGPSCFG="xtra_info"\r\n', resposta, "", 5)
-        text = bytes(resposta).decode("utf-8", "ignore").replace("\x00", "").strip()
-        debug("XTRA info:", text)
+
 
     # Connectar MQTT i publicar primera posició
     try:
