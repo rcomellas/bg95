@@ -1,8 +1,8 @@
 # main.py — Tracker BG95-M3
-VERSIO = "1.0.55"
+VERSIO = "1.0.59"
 
 import utime, ujson, quecgnss, pm, checkNet, atcmd, app_fota
-import ntptime, uos, net, dataCall, ubinascii, uhashlib, uselect
+import ntptime, uos, ubinascii, uhashlib, uselect
 from misc import Power
 from umqtt import MQTTClient
 from machine import WDT
@@ -157,11 +157,8 @@ def obtenir_posicio():
 
         gnss_time = temps_transcorregut(inici)
 
-        # quecgnss.gnssEnable(0)
-        # quecgnss.setPriority(1)
         wdt.feed()
         
-
         debug("Posició obtinguda en", gnss_time, "segons:", posicio)
 
         return posicio, gnss_time
@@ -176,7 +173,6 @@ def _debug_cn0(dades, temps):
     print("[%4ds]" % segons, end=" ")
     print("Sense fix:", temps, "s", end=" ")
     cn0 = []
-
 
     for linia in dades.split("\r\n"):
         if "GSV" in linia:
@@ -193,7 +189,6 @@ def _debug_cn0(dades, temps):
         print("Sat:", len(cn0), "C/N0 mitjà:", sum(cn0) // len(cn0), "dB-Hz")
     else:
         print("Sat: 0 C/N0 mitjà: 0")
-
 
 # ---------------------------------------------------------------------------
 # senyal / psm
@@ -379,7 +374,6 @@ def processar_ordre(topic, missatge):
     except Exception as error:
         debug("Error processant ordre MQTT:", error)
         guardar_error("MQTT: error processant ordre:", error)
-
 
 
 # ---------------------------------------------------------------------------
@@ -600,6 +594,10 @@ def main():
     publicar_log(client)
     rsrp, rsrq = obtenir_senyal()
 
+    resposta = bytearray(100)
+    atcmd.sendSync("AT+QTEMP\r\n", resposta, "", 10)
+    temperatura = int(bytes(resposta).decode().split("+QTEMP:")[1].split(",")[0])
+
     # Negociació PSM
     tau_demanat = calcular_tau_a_demanar()
 
@@ -642,7 +640,8 @@ def main():
         # "temps_ntp": temps_NTP,
         "timezone": utime.getTimeZone(),
         "hora": "%02d:%02d:%02d" % utime.localtime()[3:6],
-        "hora_gnss": hora_gnss
+        "hora_gnss": hora_gnss,
+        "temp": temperatura
     }
     try:
         utime.sleep(1)
@@ -667,4 +666,4 @@ except Exception as error:
     debug("Error fatal a main:", error)
     guardar_error("Main: error fatal:", error)
     pm.autosleep(1)
-    utime.sleep(120)
+    utime.sleep(120)    
